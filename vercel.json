@@ -1,0 +1,10 @@
+{
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python",
+      "config": { "includeFiles": ["templates/**", "static/**", "docx_template/quotation_template.docx"] }
+    }
+  ],
+  "routes": [{ "src": "/(.*)", "dest": "app.py" }]
+}

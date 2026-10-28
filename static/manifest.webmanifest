@@ -1,0 +1,16 @@
+{
+  "name": "MBTION Quotation Generator",
+  "short_name": "MBTION Quotes",
+  "description": "Create, review and share solar EPC quotations.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0B2644",
+  "theme_color": "#0B2644",
+  "icons": [
+    { "src": "/static/img/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/img/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

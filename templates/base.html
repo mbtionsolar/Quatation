@@ -1,0 +1,28 @@
+{% from "_icons.html" import ico %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="theme-color" content="#0B2644">
+  <meta name="color-scheme" content="light">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MBTION Quotes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Quotation Generator{% endblock %} | MBTION Engineering</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
+  <link rel="manifest" href="{{ url_for('manifest') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ asset_v }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% block nav %}{% endblock %}
+{% block content %}{% endblock %}
+<div class="toast-wrap" id="toasts" aria-live="polite"></div>
+{% block scripts %}{% endblock %}
+<script src="{{ url_for('static', filename='js/pwa.js') }}?v={{ asset_v }}" defer></script>
+</body>
+</html>

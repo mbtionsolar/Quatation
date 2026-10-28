@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block content %}
+<div class="auth">
+  <aside class="auth-brand" aria-hidden="true">
+    <img src="{{ url_for('static', filename='img/logo-mark.png') }}" alt="">
+    <h1>MB<b>T</b>ION</h1>
+    <div class="tag">Engineering &middot; Solar EPC</div>
+    <ul>
+      <li>{{ ico('file') }}<span>Professional PDF quotations in your original MBTION design</span></li>
+      <li>{{ ico('zap') }}<span>Automatic rate, GST and total calculation</span></li>
+      <li>{{ ico('share') }}<span>Review, download and share with the customer in seconds</span></li>
+    </ul>
+  </aside>
+
+  <main class="auth-main">
+    <div class="auth-mobile-brand">
+      <img src="{{ url_for('static', filename='img/logo-mark.png') }}" alt="MBTION">
+      <span class="brand-name">MB<b>T</b>ION</span>
+      <span class="brand-sub">Engineering &middot; Solar EPC</span>
+    </div>
+
+    <div class="auth-card">
+      <h2>Welcome back</h2>
+      <p class="sub">Login to create a new quotation.</p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}" role="alert">{{ ico('alert') }}<span>{{ message }}</span></div>
+        {% endfor %}
+      {% endwith %}
+
+      <form method="post" autocomplete="on" id="login-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="field">
+          <label for="username">Username</label>
+          <div class="with-ico">
+            {{ ico('user') }}
+            <input type="text" id="username" name="username" required autofocus autocomplete="username" autocapitalize="none" spellcheck="false">
+          </div>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="ig">
+            <input type="password" id="password" name="password" required autocomplete="current-password">
+            <button class="ig-text" type="button" id="toggle-pass" aria-label="Show password">{{ ico('eye') }}{{ ico('eye-off') }}</button>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg btn-block" id="login-btn">
+          <span class="spinner" aria-hidden="true"></span><span>Login</span>
+        </button>
+      </form>
+    </div>
+    <p class="auth-foot">&copy; MBTION Engineering</p>
+  </main>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/login.js') }}?v={{ asset_v }}" defer></script>
+{% endblock %}

@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% from "_icons.html" import ico %}
+{% block title %}New Quotation{% endblock %}
+
+{% macro pill(num, title, note='') %}
+  <div class="pill"><span class="num">{{ num }}</span>{{ title }}{% if note %}<span class="pill-note">{{ note }}</span>{% endif %}</div>
+{% endmacro %}
+
+{% macro actions() %}
+  <button type="button" class="btn btn-primary btn-lg btn-block" data-act="review">{{ ico('eye') }}<span>Review &amp; Share</span></button>
+  <button type="button" class="btn btn-ghost-light btn-block" data-act="reset">{{ ico('reset') }}<span>Reset form</span></button>
+{% endmacro %}
+
+{% block nav %}
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="{{ url_for('index') }}" aria-label="MBTION Quotation Generator">
+      <img src="{{ url_for('static', filename='img/logo-mark.png') }}" alt="">
+      <span><span class="brand-name">MB<b>T</b>ION</span><span class="brand-sub">Quotation Generator</span></span>
+    </a>
+    <div class="topbar-right">
+      <span class="who">Logged in as <strong>{{ session.user }}</strong></span>
+      <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-sm btn-ghost-light">{{ ico('logout') }}<span>Logout</span></button>
+      </form>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<main class="page" id="app" data-calc-url="{{ url_for('api_calc') }}" data-login-url="{{ url_for('login') }}"
+      data-gst="{{ gst }}" data-terms-total="{{ terms|length }}">
+
+  <div class="page-head">
+    <h1>Create Quotation</h1>
+    <p>Fill in the details, review the quotation, then download or share it. The quotation is made as a PDF in your original MBTION design.</p>
+  </div>
+
+  <nav class="chips" id="chips" aria-label="Form sections">
+    <a class="chip" href="#s1"><i>1</i>Customer</a>
+    <a class="chip" href="#s2"><i>2</i>Capacity</a>
+    <a class="chip" href="#s3"><i>3</i>Specs</a>
+    <a class="chip" href="#s4"><i>4</i>Pricing</a>
+    <a class="chip" href="#s5"><i>5</i>Terms</a>
+    <a class="chip" href="#s6"><i>6</i>Warranty</a>
+    <a class="chip" href="#s7"><i>7</i>Contact</a>
+  </nav>
+
+  <div id="alert-box" aria-live="polite"></div>
+
+  <div class="layout">
+  <form id="quotation-form" method="post" action="{{ url_for('generate') }}" novalidate autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <!-- 1 -->
+    <section class="card" id="s1">
+      {{ pill('01', 'Customer Details') }}
+      <div class="row">
+        <div class="field f4">
+          <label for="project_type">Project type</label>
+          <input id="project_type" name="project_type" type="text" list="project-types" value="{{ d.project_type }}" required maxlength="40">
+          <datalist id="project-types"><option>Commercial</option><option>Residential</option><option>Industrial</option><option>Agricultural</option></datalist>
+          <span class="hint">Shown as &ldquo;&lt;Type&gt; Rooftop Solar EPC Project&rdquo;.</span>
+        </div>
+        <div class="field f8">
+          <label for="customer_name">Customer name</label>
+          <input id="customer_name" name="customer_name" type="text" value="{{ d.customer_name }}" required maxlength="120" autocomplete="off" autocapitalize="words">
+        </div>
+        <div class="field">
+          <label for="customer_address">Customer address</label>
+          <textarea id="customer_address" name="customer_address" rows="2" required maxlength="250" autocapitalize="sentences">{{ d.customer_address }}</textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="card" id="s2">
+      {{ pill('02', 'Project Capacity') }}
+      <div class="row">
+        <div class="field h f4">
+          <label for="module_qty">No. of PV modules</label>
+          <input id="module_qty" name="module_qty" type="number" min="1" step="1" inputmode="numeric" value="{{ d.module_qty }}" required>
+        </div>
+        <div class="field h f4">
+          <label for="module_wp">Module wattage</label>
+          <div class="ig"><input id="module_wp" name="module_wp" type="number" min="1" max="2000" step="1" inputmode="numeric" value="{{ d.module_wp }}" required><span class="ig-text">Wp</span></div>
+        </div>
+        <div class="field f4">
+          <label for="capacity_kw">Project capacity</label>
+          <div class="ig"><input id="capacity_kw" name="capacity_kw" type="text" inputmode="decimal" value="{{ d.capacity_kw }}" required><span class="ig-text">kW</span></div>
+          <span class="hint">Auto = modules &times; Wp. You can overwrite it.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="card" id="s3">
+      {{ pill('03', 'Project Specifications') }}
+      <div class="row">
+        <div class="field f6"><label for="module_make">PV module make</label>
+          <input id="module_make" name="module_make" type="text" value="{{ d.module_make }}" required maxlength="80"></div>
+        <div class="field h f3"><label for="inverter_make">Inverter make</label>
+          <input id="inverter_make" name="inverter_make" type="text" value="{{ d.inverter_make }}" required maxlength="80"></div>
+        <div class="field h f3"><label for="inverter_kw">Inverter (kW)</label>
+          <input id="inverter_kw" name="inverter_kw" type="text" inputmode="decimal" value="{{ d.inverter_kw }}" required></div>
+
+        <div class="field h f3"><label for="acdb_make">ACDB make</label>
+          <input id="acdb_make" name="acdb_make" type="text" value="{{ d.acdb_make }}" required maxlength="80"></div>
+        <div class="field h f3"><label for="dcdb_make">DCDB make</label>
+          <input id="dcdb_make" name="dcdb_make" type="text" value="{{ d.dcdb_make }}" required maxlength="80"></div>
+        <div class="field h f3"><label for="la_make">LA cable make</label>
+          <input id="la_make" name="la_make" type="text" value="{{ d.la_make }}" required maxlength="80"></div>
+        <div class="field h f3"><label for="conduit_make">PVC conduit make</label>
+          <input id="conduit_make" name="conduit_make" type="text" value="{{ d.conduit_make }}" required maxlength="80"></div>
+
+        <div class="field f4"><label for="cable_make">Cables make</label>
+          <input id="cable_make" name="cable_make" type="text" value="{{ d.cable_make }}" required maxlength="80"></div>
+        <div class="field h f4"><label for="cable_ac_mm">AC cable (mm&sup2; Cu)</label>
+          <input id="cable_ac_mm" name="cable_ac_mm" type="text" inputmode="decimal" value="{{ d.cable_ac_mm }}" required></div>
+        <div class="field h f4"><label for="cable_dc_mm">DC cable (mm&sup2; Cu)</label>
+          <input id="cable_dc_mm" name="cable_dc_mm" type="text" inputmode="decimal" value="{{ d.cable_dc_mm }}" required></div>
+
+        <div class="field f4"><label for="earth_make">Earthing cable make</label>
+          <input id="earth_make" name="earth_make" type="text" value="{{ d.earth_make }}" required maxlength="80"></div>
+        <div class="field h f2"><label for="earth_mm">Earthing (mm)</label>
+          <input id="earth_mm" name="earth_mm" type="text" inputmode="decimal" value="{{ d.earth_mm }}" required></div>
+        <div class="field f4"><label for="structure_make">GI structure make</label>
+          <input id="structure_make" name="structure_make" type="text" value="{{ d.structure_make }}" required maxlength="80"></div>
+        <div class="field h f2"><label for="structure_height">Height (ft)</label>
+          <input id="structure_height" name="structure_height" type="text" value="{{ d.structure_height }}" required maxlength="20"></div>
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="card" id="s4">
+      {{ pill('04', 'Rates & Total Cost') }}
+      <div class="seg" role="radiogroup" aria-label="Pricing method">
+        <label><input type="radio" name="pricing_mode" id="mode1" value="total_to_rate" checked><span class="dot"></span>
+          <span><b>I know the total cost</b><small>Enter total (incl. GST), rate is calculated</small></span></label>
+        <label><input type="radio" name="pricing_mode" id="mode2" value="rate_to_total"><span class="dot"></span>
+          <span><b>I know the rate per kW</b><small>Enter rate, total is calculated</small></span></label>
+        <label><input type="radio" name="pricing_mode" id="mode3" value="manual"><span class="dot"></span>
+          <span><b>Manual</b><small>Type every amount yourself</small></span></label>
+      </div>
+      <div class="price-grid">
+        <div class="field wide"><label for="total_cost">Total cost incl. GST (&#8377;)</label>
+          <input id="total_cost" name="total_cost" type="text" inputmode="decimal" placeholder="e.g. 5,23,000" required></div>
+        <div class="field wide"><label for="rate">Rate per kW (&#8377;)</label>
+          <input id="rate" name="rate" type="text" inputmode="decimal" readonly required></div>
+        <div class="field"><label for="amount">Sub-total (&#8377;)</label>
+          <input id="amount" name="amount" type="text" inputmode="decimal" readonly></div>
+        <div class="field"><label for="gst_amount">GST @ {{ gst }}% (&#8377;)</label>
+          <input id="gst_amount" name="gst_amount" type="text" inputmode="decimal" readonly></div>
+      </div>
+      <p class="calc-hint" id="calc-hint">Amount = capacity &times; rate. GST @ {{ gst }}% is applied on the amount. Total is rounded to the nearest rupee.</p>
+    </section>
+
+    <!-- 5 -->
+    <section class="card" id="s5">
+      {{ pill('05', 'Terms & Conditions') }}
+      <div class="terms-bar">
+        <span class="badge" id="terms-count" aria-live="polite">{{ terms|length }} of {{ terms|length }} selected</span>
+        <button type="button" class="btn btn-sm btn-outline" id="terms-all">Select all</button>
+        <button type="button" class="btn btn-sm btn-outline" id="terms-none">Deselect all</button>
+        <span class="terms-note">Only ticked terms are printed and numbers re-arrange automatically. Use <strong>Highlight</strong> to shade a whole line light orange.</span>
+      </div>
+      <div class="terms" id="terms-box">
+        {% for t in terms %}
+        <div class="term">
+          <label class="term-main" for="term{{ loop.index }}">
+            <input class="chk" type="checkbox" name="terms" value="{{ loop.index }}" id="term{{ loop.index }}" checked>
+            <span class="term-no">{{ loop.index }}</span><span class="term-text">{{ t }}</span>
+          </label>
+          <label class="term-hl" title="Highlight this whole line in light orange">
+            <input class="chk chk-orange" type="checkbox" name="highlight" value="{{ loop.index }}"><span>Highlight</span>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if custom_slots %}
+      <div class="custom-box" id="custom-terms">
+        <h3>Additional conditions <span class="muted fw-normal">(optional, up to {{ custom_slots }})</span></h3>
+        <p class="hint custom-help">Type your own condition. It prints after the ticked terms with the next number. Leave a box empty to skip it.</p>
+        {% for i in range(1, custom_slots + 1) %}
+        <div class="custom-row">
+          <span class="custom-no is-idle" aria-hidden="true">{{ terms|length + i }}</span>
+          <div class="field"><input type="text" name="custom_term_{{ i }}" maxlength="{{ custom_len }}" placeholder="Extra condition {{ i }}" aria-label="Extra condition {{ i }}" autocomplete="off"></div>
+          <label class="term-hl" title="Highlight this whole line in light orange">
+            <input class="chk chk-orange" type="checkbox" name="custom_hl_{{ i }}" value="1"><span>Highlight</span>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- 6 -->
+    <section class="card" id="s6">
+      {{ pill('06', 'Warranty Details') }}
+      <div class="row">
+        <div class="field f6"><label for="warranty_panel">Solar panel (item name)</label>
+          <input id="warranty_panel" name="warranty_panel" type="text" value="{{ d.warranty_panel }}" required maxlength="80">
+          <span class="hint">Auto-filled from module make. Editable.</span></div>
+        <div class="field f6"><label for="warranty_inverter">Inverter (item name)</label>
+          <input id="warranty_inverter" name="warranty_inverter" type="text" value="{{ d.warranty_inverter }}" required maxlength="80">
+          <span class="hint">Auto-filled from inverter make and kW. Editable.</span></div>
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="card" id="s7">
+      {{ pill('07', 'Contact Person', 'page footer') }}
+      <div class="row">
+        <div class="field f6"><label for="contact_name">Name</label>
+          <input id="contact_name" name="contact_name" type="text" value="{{ d.contact_name }}" required maxlength="60" autocapitalize="characters"></div>
+        <div class="field f6"><label for="contact_mobile">Mobile number</label>
+          <div class="ig"><span class="ig-text">+91</span>
+            <input id="contact_mobile" name="contact_mobile" type="text" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" value="{{ d.contact_mobile }}" required></div></div>
+      </div>
+    </section>
+  </form>
+
+  <!-- desktop side panel -->
+  <aside class="summary" aria-label="Quotation summary">
+    <div class="summary-card">
+      <h2>Quotation summary</h2>
+      <div class="summary-cust is-empty" data-sum="customer">Customer name&hellip;</div>
+      <div class="summary-meta" data-sum="project"></div>
+      <div class="summary-total"><small>Total (incl. GST)</small><strong data-sum="total">&#8377; &ndash;</strong></div>
+      <dl>
+        <dt>Capacity</dt><dd data-sum="capacity">&ndash;</dd>
+        <dt>Rate / kW</dt><dd data-sum="rate">&ndash;</dd>
+        <dt>Sub-total</dt><dd data-sum="amount">&ndash;</dd>
+        <dt>GST @ {{ gst }}%</dt><dd data-sum="gst">&ndash;</dd>
+        <dt>Terms</dt><dd data-sum="terms">&ndash;</dd>
+      </dl>
+      {{ actions() }}
+    </div>
+  </aside>
+  </div>
+</main>
+
+<!-- mobile / tablet bottom bar -->
+<div class="bar" role="region" aria-label="Actions">
+  <div class="bar-in">
+    <button type="button" class="btn btn-outline btn-icon" data-act="reset" aria-label="Reset form" title="Reset form">{{ ico('reset') }}</button>
+    <div class="bar-total"><small>Total incl. GST</small><strong data-sum="total">&#8377; &ndash;</strong></div>
+    <button type="button" class="btn btn-primary btn-lg" data-act="review">{{ ico('eye') }}<span>Review</span></button>
+  </div>
+</div>
+
+<!-- review sheet -->
+<div class="sheet" id="review" hidden role="dialog" aria-modal="true" aria-labelledby="review-title">
+  <div class="sheet-backdrop" data-act="close-review"></div>
+  <div class="sheet-panel">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <div class="sheet-title"><h2 id="review-title">Review quotation</h2><p>Check everything before you download or share.</p></div>
+      <button type="button" class="btn btn-outline btn-sm" data-act="close-review" id="btn-edit" aria-label="Close review and edit">{{ ico('edit') }}<span>Edit</span></button>
+    </div>
+    <div class="sheet-body" id="review-body"></div>
+    <div class="sheet-foot">
+      <div class="rv-state" id="rv-state" role="status"><span class="spinner" aria-hidden="true"></span><span id="rv-state-text">Preparing PDF&hellip;</span></div>
+      <div class="foot-row main">
+        <button type="button" class="btn btn-primary btn-lg" id="btn-download" disabled>{{ ico('download') }}<span>Download PDF</span></button>
+        <button type="button" class="btn btn-navy btn-lg" id="btn-share-file" disabled hidden>{{ ico('share') }}<span>Share file</span></button>
+      </div>
+      <div class="foot-row three">
+        <button type="button" class="btn btn-wa btn-sm" id="btn-wa">{{ ico('chat') }}<span>WhatsApp</span></button>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-mail">{{ ico('mail') }}<span>Email</span></button>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-copy">{{ ico('copy') }}<span>Copy</span></button>
+      </div>
+      <p class="foot-tip" id="share-tip">WhatsApp / Email / Copy send a short summary. To send the PDF, download it and attach it.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/form.js') }}?v={{ asset_v }}" defer></script>
+{% endblock %}

@@ -32,23 +32,35 @@ NUMBER_TEXT_FIELDS = {  # printed as typed, but must look like a number
     "cable_dc_mm": "DC cable size (mm)", "earth_mm": "Earthing cable size (mm)",
 }
 MODES = ("total_to_rate", "rate_to_total", "manual")
+CAPACITY_MAX = Decimal("100000")      # kW
 CUSTOM_TERMS_MAX = 4        # blank rows available in the Word template (after term 16)
 CUSTOM_TERM_LEN = 200
-_NUM = re.compile(r"^\d+(\.\d+)?$")
+_NUM = re.compile(r"^[0-9]{1,9}(\.[0-9]{1,6})?$")
+INT6 = re.compile(r"^[0-9]{1,6}$")          # whole numbers (ASCII digits only, so int() can never fail)
+MOBILE = re.compile(r"^[0-9]{10}$")
 
 
 def clean(value):
     return re.sub(r"\s+", " ", value or "").strip()
 
 
-def parse_amount(value, label):
+def parse_amount(value, label, lo=Decimal("0.01"), hi=Decimal("1e11")):
+    """Text -> Decimal, or ValueError with a message that is safe to show to the user."""
     text = re.sub(r"[,\s₹]", "", value or "").rstrip("/-")
+    if not text or len(text) > 30:
+        raise ValueError(f"{label} must be a number.")
     try:
         d = Decimal(text)
     except InvalidOperation:
         raise ValueError(f"{label} must be a number.")
-    if not d.is_finite() or d <= 0 or d >= Decimal("1e11"):
+    if not d.is_finite():
+        raise ValueError(f"{label} must be a number.")
+    if d <= 0:
         raise ValueError(f"{label} must be greater than 0.")
+    if d < lo:
+        raise ValueError(f"{label} is too small.")
+    if d >= hi:
+        raise ValueError(f"{label} is too large.")
     return d
 
 
@@ -92,6 +104,11 @@ def compute_pricing(mode, capacity, form):
             amount = parse_amount(form.get("amount"), "Amount")
             gst_amt = parse_amount(form.get("gst_amount"), "GST amount")
             total = parse_amount(form.get("total_cost"), "Total project cost")
+        if amount >= Decimal("1e12") or total >= Decimal("1e12"):
+            raise ValueError("Amount is too large. Please check the capacity and rate.")
+    except ArithmeticError:           # decimal overflow / invalid operation on absurd numbers
+        field = {"total_to_rate": "total_cost", "rate_to_total": "rate"}.get(mode, "rate")
+        return None, {field: "These numbers are out of range. Please check the capacity and amount."}
     except ValueError as exc:
         field = {"total_to_rate": "total_cost", "rate_to_total": "rate"}.get(mode)
         msg = str(exc)
@@ -134,19 +151,19 @@ def build_values(form):
         values[name] = v
 
     qty = clean(form.get("module_qty"))
-    if not qty.isdigit() or int(qty) <= 0:
+    if not INT6.match(qty) or int(qty) <= 0:
         errors["module_qty"] = "Number of modules must be a whole number."
     values["module_qty"] = qty
 
     wp = clean(form.get("module_wp"))
-    if not wp.isdigit() or not 1 <= int(wp) <= 2000:
+    if not INT6.match(wp) or not 1 <= int(wp) <= 2000:
         errors["module_wp"] = "Module wattage must be a whole number (Wp), e.g. 615."
     values["module_wp"] = wp
 
     cap_text = clean(form.get("capacity_kw"))
     capacity = None
     try:
-        capacity = parse_amount(cap_text, "Project capacity")
+        capacity = parse_amount(cap_text, "Project capacity", hi=CAPACITY_MAX)
     except ValueError as exc:
         errors["capacity_kw"] = str(exc)
     values["capacity_kw"] = cap_text
@@ -158,7 +175,7 @@ def build_values(form):
         values[f"custom_term_{i}"] = items[i - 1][0] if i <= len(items) else ""
 
     mobile = re.sub(r"[\s-]", "", form.get("contact_mobile") or "")
-    if not re.fullmatch(r"\d{10}", mobile):
+    if not MOBILE.match(mobile):
         errors["contact_mobile"] = "Enter a 10 digit mobile number."
     values["contact_mobile"] = mobile
 

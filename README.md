@@ -40,13 +40,61 @@ Browser: http://127.0.0.1:5000 . Agar `.env` nahi banaya to default login `admin
 
 ### Render (Docker, recommended)
 1. Project ko GitHub par push karo.
-2. Render -> **New -> Blueprint** -> repo select karo (`render.yaml` apne aap padh leta hai). Ya **New -> Web Service** lo aur **Language: Docker** chuno
-   (Dockerfile apne aap detect hota hai, Build/Start command khali chhodo).
-3. Environment mein `ADMIN_USERNAME`, `ADMIN_PASSWORD` daalo (`SECRET_KEY` Blueprint khud bana deta hai).
-4. Deploy ke baad link kholo. Free plan 15 min idle ke baad sleep hota hai, pehla load 30-60 sec le sakta hai.
-
+2. Render -> **New -> Blueprint** -> repo select karo (`render.yaml` apne aap padh leta hai; region Singapore hai = India ke sabse paas).
+   Ya **New -> Web Service** lo aur **Language: Docker** chuno (Dockerfile apne aap detect hota hai, Build/Start command khali chhodo).
+3. Environment mein `ADMIN_USERNAME` aur `ADMIN_PASSWORD` daalo (`SECRET_KEY` Blueprint khud bana deta hai).
+4. Deploy ke baad `https://<aapka-app>.onrender.com/readyz` kholo. Teen cheezein `true` honi chahiye: `template`, `pdf_engine`, `login_configured`.
+5. Free plan 15 min idle ke baad sleep hota hai, pehla load 30-60 sec le sakta hai (login page par hi PDF engine garam ho jaata hai).
 
 Render par HTTPS apne aap milta hai aur secure cookie apne aap on ho jaati hai. Strong password rakho (ya `.env.example` mein bataya `ADMIN_PASSWORD_HASH` use karo).
+
+### Environment variables
+| Name | Zaroori? | Matlab |
+|---|---|---|
+| `ADMIN_USERNAME` | haan | login username |
+| `ADMIN_PASSWORD` | haan | login password. Render par ye na ho to login band rehta hai aur login page par set-up message dikhta hai (default `admin123` host par kabhi kaam nahi karta) |
+| `SECRET_KEY` | blueprint bana deta hai | session ki chaabi. Na ho to login ke username/password se stable chaabi ban jaati hai (restart / sleep par logout nahi hota) |
+| `ADMIN_PASSWORD_HASH` | optional | plain password ki jagah hash |
+| `PDF_TIMEOUT` | optional (60) | ek PDF banne ka max time (seconds) |
+| `PDF_LOCK_WAIT` | optional (30) | dusri PDF chal rahi ho to kitna intezaar |
+| `PDF_WARMUP` | optional (1) | 1 = server start par PDF engine pehle se garam kar do |
+| `LOG_LEVEL` | optional (INFO) | DEBUG / INFO / WARNING / ERROR |
+
+## Error handling (kya kya sambhala gaya hai)
+Har error ka seedha insaani message aata hai; server crash (500) ki jagah saaf jawab milta hai. Detail Render -> **Logs** mein jaati hai
+aur user ko chhota **ref** milta hai (jaise `ref: 3fa91c0b`), Logs mein usi ref ko search karo.
+
+**Server**
+- Galat / ajeeb input (jaise `1e-30`, `nan`, Unicode digits, bahut lamba number, galat JSON) -> 400 + field ke saamne error, crash nahi
+- Session expire / CSRF galat -> form ko 401 JSON (login par bhejta hai), browser ko login page; non-ASCII token se bhi crash nahi
+- Word template gayab ya kharab -> saaf message + `/readyz` mein `template: false`
+- PDF: timeout, LibreOffice crash, kharab output, ya dusri PDF chal rahi ho -> 503 + "thodi der baad try karo"; timeout par LibreOffice ka poora process-tree kill hota hai (RAM nahi phansti)
+- Har HTTP error (404, 405, 413, 429...) ke liye friendly page (form/API ke liye JSON); error page khud fail ho to bhi plain text
+- Login par 5 galat try ke baad 5 minute ka lock (Render proxy ke peeche asli IP se), `next=` open-redirect block
+- Quotation ki date India time (IST) mein; Render UTC par chalta hai
+- Gujarati / Hindi naam-address PDF mein sahi chhapte hain (Docker image mein Noto fonts)
+
+**Browser**
+- Internet band hone par, server ke jaldi na jawab dene par (100 sec timeout), ya Render sleep se jaag raha ho to alag-alag saaf message; "Download" dobara dabane se retry
+- Session expire hone par form mein bhari hui entries save hoke login ke baad wapas aa jaati hain (sirf us tab mein, 30 min tak)
+- Server ke jo errors kisi field se match nahi karte wo bhi dikhte hain (chup nahi rehte)
+- Page ka koi script error aaye to bhi toast aata hai; service worker offline mein crash nahi karta
+
+### Kuch galat ho to
+| Dikhta hai | Matlab / kya karein |
+|---|---|
+| Login page par "Login is not set up yet" | Render -> Environment mein `ADMIN_USERNAME`, `ADMIN_PASSWORD` daalo, redeploy |
+| "The server is starting up or busy" | Free plan jaag raha hai. 30 sec ruk ke Download dobara dabao |
+| "The server is busy making another quotation" | Ek saath do PDF; kuch second baad dobara |
+| "PDF creation took too long" | Pehli baar slow ho sakta hai; dobara try karo. Roz hota ho to `PDF_TIMEOUT` badhao ya paid plan lo |
+| "Word template is missing or damaged" | `docx_template/quotation_template.docx` wapas rakho; `/readyz` se confirm karo |
+| "Something went wrong (ref: ...)" | Render -> Logs mein ref search karo |
+
+### Tests
+```bash
+python -m unittest discover -s tests -v
+```
+27 checks (galat input, session, template, PDF engine, login lock, asli PDF). LibreOffice na ho to asli-PDF wala test apne aap skip ho jaata hai.
 
 ## Future mobile app
 - Abhi: PWA (Home screen par install). Android/iOS store app chahiye to isi site ko Capacitor/TWA se wrap kar sakte ho, backend wahi rahega.
@@ -92,14 +140,16 @@ Naya field jodne ke liye: (1) Word template mein `{{naya_field}}` likho, (2) `te
 (3) `quotation.py` ke `TEXT_FIELDS` aur `DEFAULTS` mein add karo.
 
 ## Files
-- `app.py` - routes: /login, /quotation, /generate, /api/calc, /logout, /healthz, PWA (/manifest.webmanifest, /sw.js), security (CSRF, CSP, session)
+- `app.py` - routes: /login, /quotation, /generate, /api/calc, /logout, /healthz, /readyz, error handlers, PWA (/manifest.webmanifest, /sw.js), security (CSRF, CSP, session)
 - `quotation.py` - validation + pricing + number format
 - `pdfconv.py` - filled Word file -> PDF (LibreOffice)
-- `Dockerfile` - LibreOffice + fonts ke saath server image
+- `Dockerfile` - LibreOffice + fonts ke saath server image (normal user, healthcheck)
+- `gunicorn.conf.py` - server settings (1 worker, 4 threads, logs stdout par)
+- `tests/test_app.py` - automatic checks
 - `docxfill.py` - Word template fill + Terms & Conditions rows select/renumber (formatting touch nahi karta)
 - `templates/` - `base.html`, `login.html`, `form.html`, `logout.html`, `_icons.html`
 - `static/css/style.css` - poora design system (colours, buttons, form, review sheet)
-- `static/js/form.js` - pricing, terms, validation, **review + download + share**; `login.js`, `pwa.js`, `sw.js`
+- `static/js/form.js` - pricing, terms, validation, **review + download + share**; `login.js`, `pwa.js`, `sw.js`; `templates/error.html` friendly error page
 - `vercel.json`, `render.yaml`, `Procfile` - hosting config
 - `tools/build_template.py` - original `<...>` wali Word file se template banane ka tool (ek baar chala chuka hai)
 

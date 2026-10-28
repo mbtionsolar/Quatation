@@ -31,6 +31,10 @@
         {% endfor %}
       {% endwith %}
 
+      {% for problem in config_problems or [] %}
+        <div class="alert alert-warning" role="alert">{{ ico('alert') }}<span>{{ problem }}</span></div>
+      {% endfor %}
+
       <form method="post" autocomplete="on" id="login-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="field">

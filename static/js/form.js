@@ -41,6 +41,60 @@
     setTimeout(() => el.remove(), 3200);
   }
 
+  // ---------- safety net: unexpected script errors never fail silently ----------
+  let lastCrash = 0;
+  function crashed(msg) {
+    if (/ResizeObserver|Script error/i.test(String(msg || ''))) return;
+    if (Date.now() - lastCrash < 8000) return;
+    lastCrash = Date.now();
+    toast('Something went wrong on this page. Please refresh and try again.', 'err');
+  }
+  window.addEventListener('error', (e) => crashed(e.message));
+  window.addEventListener('unhandledrejection', (e) => crashed(e.reason && e.reason.message));
+
+  function friendly(status, serverMsg) {
+    if (serverMsg) return serverMsg;
+    if (status === 413) return 'The data is too large. Please shorten the text and try again.';
+    if (status === 429) return 'Too many requests. Please wait a moment and try again.';
+    if (status === 502 || status === 503 || status === 504) return 'The server is starting up or busy. Please wait about 30 seconds and tap Download again.';
+    if (status >= 500) return 'Server error. Please try again.';
+    return 'Request failed (' + status + '). Please try again.';
+  }
+
+  // ---------- session expiry: keep what the user typed ----------
+  const DRAFT_KEY = 'mbtion-quote-draft-v1';
+  function saveDraft() {
+    try {
+      const pairs = [...new FormData(form)].filter(([k, v]) => k !== 'csrf_token' && typeof v === 'string');
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ t: Date.now(), pairs }));
+    } catch (_) { /* storage blocked - nothing to save */ }
+  }
+  function sessionExpired() {
+    saveDraft();
+    toast('Session expired. Taking you to login - your entries will be restored.', 'err');
+    setTimeout(() => { location.href = cfg.loginUrl + '?next=' + encodeURIComponent('/quotation'); }, 1200);
+  }
+  function restoreDraft() {
+    let raw = null;
+    try { raw = sessionStorage.getItem(DRAFT_KEY); sessionStorage.removeItem(DRAFT_KEY); } catch (_) { return false; }
+    if (!raw) return false;
+    try {
+      const draft = JSON.parse(raw);
+      if (!draft || !Array.isArray(draft.pairs) || Date.now() - draft.t > 30 * 60 * 1000) return false;
+      const by = {};
+      draft.pairs.forEach(([k, v]) => { (by[k] = by[k] || []).push(String(v)); });
+      [...form.elements].forEach((el) => {
+        if (!el.name || el.name === 'csrf_token' || ['hidden', 'button', 'submit', 'reset'].includes(el.type)) return;
+        const vals = by[el.name];
+        if (el.type === 'checkbox' || el.type === 'radio') el.checked = !!vals && vals.includes(el.value);
+        else if (vals) el.value = vals[0];
+      });
+      ['capacity_kw', 'warranty_panel', 'warranty_inverter'].forEach((n) => { if (val(n)) touched.add(n); });
+      setTimeout(() => toast('Your entries were restored.'), 400);
+      return true;
+    } catch (_) { return false; }
+  }
+
   // ---------- alerts / field errors ----------
   function showAlert(type, text) {
     alertBox.innerHTML = '';
@@ -65,10 +119,11 @@
   }
   function showFieldErrors(errors, banner = true) {
     let first = null;
+    const loose = [];                       // messages with no matching input must still be shown
     Object.entries(errors).forEach(([name, msg]) => {
       const isTerms = name === 'terms';
       const el = isTerms ? $('#terms-box') : f(name);
-      if (!el || el.length) return;
+      if (!el || el.length) { loose.push(msg); return; }
       el.classList.add('is-invalid');
       const msgEl = document.createElement('div');
       msgEl.className = 'field-error js-error';
@@ -76,7 +131,10 @@
       if (isTerms) el.after(msgEl); else (el.closest('.field') || el.parentNode).appendChild(msgEl);
       first = first || el;
     });
-    if (banner) showAlert('danger', 'Please correct the highlighted fields.');
+    if (banner) {
+      const text = ((first ? 'Please correct the highlighted fields. ' : '') + loose.join(' ')).trim();
+      showAlert('danger', text || 'Please correct the highlighted fields.');
+    }
     if (first) {
       first.scrollIntoView({ behavior: 'smooth', block: 'center' });
       if (first.focus && first.id !== 'terms-box') setTimeout(() => first.focus({ preventScroll: true }), 350);
@@ -131,7 +189,7 @@
           headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
           body: JSON.stringify({ mode: m, capacity_kw: f('capacity_kw').value, rate: f('rate').value, total_cost: f('total_cost').value }),
         });
-        if (r.status === 401) { location.href = cfg.loginUrl; return; }
+        if (r.status === 401) { sessionExpired(); return; }
         const d = await r.json();
         if (mine !== seq) return;
         if (d.error) {
@@ -142,7 +200,10 @@
           computed.forEach((n) => (f(n).value = d[n]));
           setHint(hintText);
         }
-      } catch (_) { /* preview only - the server recalculates on submit */ }
+      } catch (_) {
+        // preview only - the server recalculates on submit
+        if (mine === seq) setHint('Could not reach the server. Amounts are calculated again when you download.', false);
+      }
       updateSummary();
     }, 250);
   }
@@ -264,7 +325,7 @@
   const rvState = $('#rv-state'), rvText = $('#rv-state-text');
   const btnDownload = $('#btn-download'), btnShareFile = $('#btn-share-file');
   let lastFocus = null;
-  const gen = { key: null, file: null, token: 0, busy: false };
+  const gen = { key: null, file: null, token: 0, busy: false, ctl: null };
 
   const formKey = () => JSON.stringify([...new FormData(form)].filter(([k]) => k !== 'csrf_token'));
 
@@ -342,36 +403,54 @@
   }
   const canShareFile = (file) => !!(navigator.canShare && file && navigator.canShare({ files: [file] }));
 
+  const GEN_TIMEOUT_MS = 100000;
   async function prepareFile() {
     const key = formKey();
     if (gen.file && gen.key === key) { setReady(); return gen.file; }
+    if (navigator.onLine === false) {
+      setState('fail', 'No internet connection. Connect and tap Download to try again.');
+      btnDownload.disabled = false;
+      return null;
+    }
     const mine = ++gen.token;
     gen.file = null; gen.busy = true;
     btnDownload.disabled = true; btnShareFile.disabled = true;
     setState('', 'Preparing PDF…');
+    const ctl = new AbortController();
+    gen.ctl = ctl;
+    const killTimer = setTimeout(() => ctl.abort(), GEN_TIMEOUT_MS);
+    const slowTimer = setTimeout(() => { if (mine === gen.token && gen.busy) setState('', 'Still working… the server may be waking up, please wait.'); }, 12000);
     try {
-      const r = await fetch(form.action, { method: 'POST', headers: { 'X-CSRFToken': csrf }, body: new FormData(form) });
+      const r = await fetch(form.action, { method: 'POST', headers: { 'X-CSRFToken': csrf }, body: new FormData(form), signal: ctl.signal, credentials: 'same-origin' });
       if (mine !== gen.token) return null;
-      if (r.status === 401) { location.href = cfg.loginUrl; return null; }
+      if (r.status === 401) { sessionExpired(); return null; }
+      const ctype = r.headers.get('Content-Type') || '';
       if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
+        const d = ctype.includes('json') ? await r.json().catch(() => ({})) : {};
         if (d.errors) { closeReview(); showFieldErrors(d.errors); return null; }
-        throw new Error(d.error || 'Server error');
+        throw new Error(friendly(r.status, d.error));
       }
+      if (!ctype.includes('pdf')) throw new Error('The server sent an unexpected reply. Please try again.');
       const m = /filename="?([^";]+)"?/.exec(r.headers.get('Content-Disposition') || '');
       const name = m ? m[1] : 'Quotation.pdf';
       const blob = await r.blob();
       if (mine !== gen.token) return null;
+      if (!blob.size) throw new Error('The PDF came back empty. Please try again.');
       gen.file = new File([blob], name, { type: PDF_MIME });
       gen.key = key;
       setReady();
       return gen.file;
     } catch (err) {
       if (mine !== gen.token) return null;
-      setState('fail', (err && err.message) || 'Could not prepare the PDF. Tap Download to try again.');
+      let msg;
+      if (err && err.name === 'AbortError') msg = 'This is taking too long. Check your connection and tap Download to try again.';
+      else if (err instanceof TypeError) msg = 'Could not reach the server. Check your internet and tap Download to try again.';
+      else msg = (err && err.message) || 'Could not prepare the PDF. Tap Download to try again.';
+      setState('fail', msg);
       btnDownload.disabled = false;
       return null;
     } finally {
+      clearTimeout(killTimer); clearTimeout(slowTimer);
       if (mine === gen.token) gen.busy = false;
     }
   }
@@ -385,11 +464,15 @@
   }
 
   function saveFile(file) {
-    const url = URL.createObjectURL(file);
-    const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    toast('Quotation downloaded');
+    try {
+      const url = URL.createObjectURL(file);
+      const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast('Quotation downloaded');
+    } catch (_) {
+      toast('Download could not start. Open this page in Chrome / Safari and try again.', 'err');
+    }
   }
 
   btnDownload.addEventListener('click', async () => {
@@ -435,6 +518,8 @@
   function closeReview() {
     if (sheet.hidden) return;
     gen.token++;                       // ignore any in-flight request
+    gen.busy = false;
+    if (gen.ctl) { try { gen.ctl.abort(); } catch (_) { /* already finished */ } }
     sheet.hidden = true;
     document.body.classList.remove('no-scroll');
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
@@ -466,6 +551,7 @@
     else if (act === 'reset') resetForm();
   });
 
+  restoreDraft();
   applyMode();
   syncAuto();
   updateTerms();

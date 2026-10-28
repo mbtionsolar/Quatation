@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ asset_v }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
+<noscript><div class="alert alert-warning noscript">{{ ico('alert') }}<span>Please turn on JavaScript in your browser. The quotation form needs it to work.</span></div></noscript>
 {% block nav %}{% endblock %}
 {% block content %}{% endblock %}
 <div class="toast-wrap" id="toasts" aria-live="polite"></div>

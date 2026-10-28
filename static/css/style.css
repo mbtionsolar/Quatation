@@ -389,3 +389,8 @@ a { color: var(--navy-3); }
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
 @media print { .topbar, .bar, .chips, .summary, .toast-wrap { display: none !important; } }
+
+/* ---------- error page + noscript ---------- */
+.auth-done .done-ico.is-err { background: var(--danger-soft); color: var(--danger); }
+.auth-done .sub.small { font-size: .8rem; margin-top: -1rem; opacity: .8; }
+.noscript { margin: 1rem; }

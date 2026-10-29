@@ -132,9 +132,12 @@ ke pehle khali paragraph par "page break before" laga hai (`tools/build_template
 ## Word template badalna
 `docx_template/quotation_template.docx` hi quotation ka design hai. Isse Word mein khol ke koi bhi text/format badal sakte hain.
 Sirf `{{field_name}}` wale tokens ko mat todna. Fields: project_type, customer_name, customer_address, module_qty,
-module_wp, capacity_kw, module_make, inverter_make, inverter_kw, acdb_make, dcdb_make, cable_make, cable_ac_mm, cable_dc_mm,
-earth_make, earth_mm, la_make, structure_make, structure_height, conduit_make, rate, amount, subtotal, gst_amount,
-total_cost, warranty_panel, warranty_inverter, contact_name, contact_mobile, custom_term_1 ... custom_term_4.
+module_wp, capacity_kw, module_make, inverter_make, inverter_qty, inverter_kw, acdb_make, dcdb_make, cable_make, cable_ac_mm, cable_dc_mm,
+earth_make, earth_mm, la_make, la_mm, structure_make, gi_pipe, thickness, structure_height, conduit_make, rate, amount, subtotal, gst_amount,
+total_cost, warranty_panel, warranty_panel_years, warranty_inverter, warranty_inverter_years, warranty_service_years, contact_name, contact_mobile, custom_term_1 ... custom_term_4.
+
+Form ke Specs section ka order haath se likhe paper ke hisaab se hai: Inverter make / INV qty / Inverter kW, ACDB / DCDB, Cables make,
+AC / DC size, Earthing make / size, LA make / size, GI structure make / GI pipe, Thickness / Height.
 
 Naya field jodne ke liye: (1) Word template mein `{{naya_field}}` likho, (2) `templates/form.html` mein input jodo (name="naya_field"),
 (3) `quotation.py` ke `TEXT_FIELDS` aur `DEFAULTS` mein add karo.

@@ -361,12 +361,12 @@
     const kw = val('capacity_kw');
     const specs = [
       ['PV modules', `${val('module_make')} – ${val('module_qty')} × ${val('module_wp')}Wp`],
-      ['Inverter', `${val('inverter_make')} – ${val('inverter_kw')} kW`],
+      ['Inverter', `${val('inverter_make')} – ${val('inverter_qty')} nos × ${val('inverter_kw')} kW`],
       ['ACDB / DCDB', `${val('acdb_make')} / ${val('dcdb_make')}`],
-      ['Cables', `${val('cable_make')} – AC ${val('cable_ac_mm')} mm² / DC ${val('cable_dc_mm')} mm² (Cu)`],
-      ['Earthing', `${val('earth_make')} – ${val('earth_mm')} mm`],
-      ['LA cable', val('la_make')],
-      ['GI structure', `${val('structure_make')} – ${val('structure_height')} ft`],
+      ['Cables', `${val('cable_make')} – AC ${val('cable_ac_mm')} mm / DC ${val('cable_dc_mm')} mm (Cu)`],
+      ['Earthing cable', `${val('earth_make')} – ${val('earth_mm')} mm`],
+      ['LA cable', `${val('la_make')} – ${val('la_mm')} mm`],
+      ['GI structure', `${val('structure_make')} – GI pipe ${val('gi_pipe')}, ${val('thickness')} mm thick, ${val('structure_height')} ft`],
       ['PVC conduit', val('conduit_make')],
     ];
     const rows = (arr) => arr.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('');
@@ -390,7 +390,7 @@
         </tbody></table></div></div>
         <div class="rv-sec"><h4><span>05</span>Terms &amp; conditions (${terms.length})</h4>
           <ol class="rv-terms">${terms.map((t, i) => `<li class="${t.hl ? 'hl' : ''}"><b>${i + 1}</b><span>${esc(t.text)}</span></li>`).join('')}</ol></div>
-        <div class="rv-sec"><h4><span>06</span>Warranty</h4><div class="rv-wrap"><table class="rv-table"><tbody>${rows([['Solar panel', val('warranty_panel')], ['Inverter', val('warranty_inverter')]])}</tbody></table></div></div>
+        <div class="rv-sec"><h4><span>06</span>Warranty</h4><div class="rv-wrap"><table class="rv-table"><tbody>${rows([['Solar panel', `${val('warranty_panel')} – ${val('warranty_panel_years')} Years`], ['Inverter', `${val('warranty_inverter')} – ${val('warranty_inverter_years')} Years`], ['All service', `${val('warranty_service_years')} Years`]])}</tbody></table></div></div>
         <div class="paper-foot"><span>${SVG.phone}${esc(val('contact_name'))}</span><span>+91 ${esc(val('contact_mobile'))}</span></div>
       </article>
       <p class="rv-note">Quick preview of your entries. The PDF keeps your original MBTION layout, fonts and tables.</p>`;

@@ -5,15 +5,17 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 GST_PERCENT = Decimal("8.9")      # same blended GST shown in the Word template ("GST @ 8.9%")
 
 DEFAULTS = {
-    "project_type": "Commercial", "customer_name": "", "customer_address": "",
-    "module_qty": "25", "module_wp": "615", "capacity_kw": "15.375",
-    "module_make": "WAAREE ENERGY LTD", "inverter_make": "Solaryaan", "inverter_kw": "15.00",
+    "project_type": "", "customer_name": "", "customer_address": "",
+    "module_qty": "", "module_wp": "", "capacity_kw": "",
+    "module_make": "", "inverter_make": "", "inverter_qty": "01", "inverter_kw": "",
     "acdb_make": "Havells", "dcdb_make": "Havells",
-    "cable_make": "Polycab", "cable_ac_mm": "6", "cable_dc_mm": "4",
-    "earth_make": "Polycab", "earth_mm": "6", "la_make": "Polytech",
-    "structure_make": "Apollo/Hindustar", "structure_height": "6/4", "conduit_make": "Polycab",
+    "cable_make": "Polycab", "cable_ac_mm": "", "cable_dc_mm": "",
+    "earth_make": "Polycab", "earth_mm": "", "la_make": "Polytech", "la_mm": "",
+    "structure_make": "Apollo/Hindustar", "gi_pipe": "40X40 & 40X60", "thickness": "2",
+    "structure_height": "6/4", "conduit_make": "Polycab",
     "pricing_mode": "total_to_rate", "rate": "", "amount": "", "gst_amount": "", "total_cost": "",
-    "warranty_panel": "WAAREE 615Wp", "warranty_inverter": "Solaryaan 15.00 KW",
+    "warranty_panel": "WAAREE 615Wp", "warranty_panel_years": "25",
+    "warranty_inverter": "Solaryaan 15.00 KW", "warranty_inverter_years": "07", "warranty_service_years": "05",
     "contact_name": "JANAK JOSHI", "contact_mobile": "8320565108",
 }
 
@@ -23,13 +25,19 @@ TEXT_FIELDS = {  # name -> (label, max length)
     "inverter_make": ("Inverter make", 80), "acdb_make": ("ACDB make", 80),
     "dcdb_make": ("DCDB make", 80), "cable_make": ("Cable make", 80),
     "earth_make": ("Earthing cable make", 80), "la_make": ("LA cable make", 80),
-    "structure_make": ("Structure make", 80), "structure_height": ("Structure height", 20),
+    "structure_make": ("Structure make", 80), "gi_pipe": ("GI pipe", 40),
+    "structure_height": ("Structure height", 20),
     "conduit_make": ("PVC conduit pipe make", 80), "warranty_panel": ("Warranty - panel", 80),
     "warranty_inverter": ("Warranty - inverter", 80), "contact_name": ("Contact person", 60),
 }
 NUMBER_TEXT_FIELDS = {  # printed as typed, but must look like a number
-    "inverter_kw": "Inverter capacity (kW)", "cable_ac_mm": "AC cable size (mm)",
-    "cable_dc_mm": "DC cable size (mm)", "earth_mm": "Earthing cable size (mm)",
+    "inverter_qty": "Inverter quantity", "inverter_kw": "Inverter capacity (kW)",
+    "cable_ac_mm": "AC cable size (mm)", "cable_dc_mm": "DC cable size (mm)",
+    "earth_mm": "Earthing cable size (mm)", "la_mm": "LA cable size (mm)",
+    "thickness": "Structure thickness (mm)",
+    "warranty_panel_years": "Solar panel warranty (years)",
+    "warranty_inverter_years": "Inverter warranty (years)",
+    "warranty_service_years": "Service warranty (years)",
 }
 MODES = ("total_to_rate", "rate_to_total", "manual")
 CAPACITY_MAX = Decimal("100000")      # kW

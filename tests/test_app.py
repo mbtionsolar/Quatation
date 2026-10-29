@@ -25,11 +25,11 @@ import pdfconv  # noqa: E402
 FORM = {
     "project_type": "Commercial", "customer_name": "Test Customer", "customer_address": "Surat, Gujarat",
     "module_qty": "25", "module_wp": "615", "capacity_kw": "15.375", "module_make": "WAAREE",
-    "inverter_make": "Solaryaan", "inverter_kw": "15", "acdb_make": "Havells", "dcdb_make": "Havells",
+    "inverter_make": "Solaryaan", "inverter_qty": "01", "inverter_kw": "15", "acdb_make": "Havells", "dcdb_make": "Havells",
     "cable_make": "Polycab", "cable_ac_mm": "6", "cable_dc_mm": "4", "earth_make": "Polycab", "earth_mm": "6",
-    "la_make": "Polytech", "structure_make": "Apollo", "structure_height": "6/4", "conduit_make": "Polycab",
+    "la_make": "Polytech", "la_mm": "16", "structure_make": "Apollo", "gi_pipe": "40X40 & 40X60", "thickness": "2", "structure_height": "6/4", "conduit_make": "Polycab",
     "pricing_mode": "total_to_rate", "total_cost": "523000", "warranty_panel": "WAAREE 615Wp",
-    "warranty_inverter": "Solaryaan 15 KW", "contact_name": "JANAK", "contact_mobile": "8320565108",
+    "warranty_inverter": "Solaryaan 15 KW", "warranty_panel_years": "25", "warranty_inverter_years": "07", "warranty_service_years": "05", "contact_name": "JANAK", "contact_mobile": "8320565108",
     "terms": ["1", "2"],
 }
 

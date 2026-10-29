@@ -35,10 +35,10 @@
 
   <div class="page-head">
     <h1>Create Quotation</h1>
-    <p>Fill in the details, review the quotation, then download or share it. The quotation is made as a PDF in your original MBTION design.</p>
+    <!-- <p>Fill in the details, review the quotation, then download or share it. The quotation is made as a PDF in your original MBTION design.</p> -->
   </div>
 
-  <nav class="chips" id="chips" aria-label="Form sections">
+  <!-- <nav class="chips" id="chips" aria-label="Form sections">
     <a class="chip" href="#s1"><i>1</i>Customer</a>
     <a class="chip" href="#s2"><i>2</i>Capacity</a>
     <a class="chip" href="#s3"><i>3</i>Specs</a>
@@ -46,7 +46,7 @@
     <a class="chip" href="#s5"><i>5</i>Terms</a>
     <a class="chip" href="#s6"><i>6</i>Warranty</a>
     <a class="chip" href="#s7"><i>7</i>Contact</a>
-  </nav>
+  </nav> -->
 
   <div id="alert-box" aria-live="polite"></div>
 
@@ -62,7 +62,7 @@
           <label for="project_type">Project type</label>
           <input id="project_type" name="project_type" type="text" list="project-types" value="{{ d.project_type }}" required maxlength="40">
           <datalist id="project-types"><option>Commercial</option><option>Residential</option><option>Industrial</option><option>Agricultural</option></datalist>
-          <span class="hint">Shown as &ldquo;&lt;Type&gt; Rooftop Solar EPC Project&rdquo;.</span>
+          <!-- <span class="hint">Shown as &ldquo;&lt;Type&gt; Rooftop Solar EPC Project&rdquo;.</span> -->
         </div>
         <div class="field f8">
           <label for="customer_name">Customer name</label>
@@ -80,6 +80,10 @@
       {{ pill('02', 'Project Capacity') }}
       <div class="row">
         <div class="field h f4">
+
+           <div class="field"><label for="module_make">PV module make</label>
+          <input id="module_make" name="module_make" type="text" value="{{ d.module_make }}" required maxlength="80"></div>
+
           <label for="module_qty">No. of PV modules</label>
           <input id="module_qty" name="module_qty" type="number" min="1" step="1" inputmode="numeric" value="{{ d.module_qty }}" required>
         </div>
@@ -95,41 +99,54 @@
       </div>
     </section>
 
-    <!-- 3 -->
+    <!-- 3 : order follows the handwritten sheet (REF) -->
     <section class="card" id="s3">
       {{ pill('03', 'Project Specifications') }}
       <div class="row">
-        <div class="field f6"><label for="module_make">PV module make</label>
-          <input id="module_make" name="module_make" type="text" value="{{ d.module_make }}" required maxlength="80"></div>
-        <div class="field h f3"><label for="inverter_make">Inverter make</label>
+       
+
+        <div class="field f6"><label for="inverter_make">Inverter make</label>
           <input id="inverter_make" name="inverter_make" type="text" value="{{ d.inverter_make }}" required maxlength="80"></div>
-        <div class="field h f3"><label for="inverter_kw">Inverter (kW)</label>
-          <input id="inverter_kw" name="inverter_kw" type="text" inputmode="decimal" value="{{ d.inverter_kw }}" required></div>
+        <div class="field h f3"><label for="inverter_qty">Inverter Quantity</label>
+          <input id="inverter_qty" name="inverter_qty" type="text" inputmode="numeric" value="{{ d.inverter_qty }}" required></div>
+        <div class="field h f3"><label for="inverter_kw">Inverter kW</label>
+          <div class="ig"><input id="inverter_kw" name="inverter_kw" type="text" inputmode="decimal" value="{{ d.inverter_kw }}" required><span class="ig-text">kW</span></div></div>
 
-        <div class="field h f3"><label for="acdb_make">ACDB make</label>
+        <div class="field h f6"><label for="acdb_make">ACDB make</label>
           <input id="acdb_make" name="acdb_make" type="text" value="{{ d.acdb_make }}" required maxlength="80"></div>
-        <div class="field h f3"><label for="dcdb_make">DCDB make</label>
+        <div class="field h f6"><label for="dcdb_make">DCDB make</label>
           <input id="dcdb_make" name="dcdb_make" type="text" value="{{ d.dcdb_make }}" required maxlength="80"></div>
-        <div class="field h f3"><label for="la_make">LA cable make</label>
-          <input id="la_make" name="la_make" type="text" value="{{ d.la_make }}" required maxlength="80"></div>
-        <div class="field h f3"><label for="conduit_make">PVC conduit make</label>
-          <input id="conduit_make" name="conduit_make" type="text" value="{{ d.conduit_make }}" required maxlength="80"></div>
 
-        <div class="field f4"><label for="cable_make">Cables make</label>
+        <div class="field"><label for="cable_make">AC/DC Cables make</label>
           <input id="cable_make" name="cable_make" type="text" value="{{ d.cable_make }}" required maxlength="80"></div>
-        <div class="field h f4"><label for="cable_ac_mm">AC cable (mm&sup2; Cu)</label>
-          <input id="cable_ac_mm" name="cable_ac_mm" type="text" inputmode="decimal" value="{{ d.cable_ac_mm }}" required></div>
-        <div class="field h f4"><label for="cable_dc_mm">DC cable (mm&sup2; Cu)</label>
-          <input id="cable_dc_mm" name="cable_dc_mm" type="text" inputmode="decimal" value="{{ d.cable_dc_mm }}" required></div>
 
-        <div class="field f4"><label for="earth_make">Earthing cable make</label>
+        <div class="field h f6"><label for="cable_ac_mm">AC cable size</label>
+          <div class="ig"><input id="cable_ac_mm" name="cable_ac_mm" type="text" inputmode="decimal" value="{{ d.cable_ac_mm }}" required><span class="ig-text">mm</span></div></div>
+        <div class="field h f6"><label for="cable_dc_mm">DC cable size</label>
+          <div class="ig"><input id="cable_dc_mm" name="cable_dc_mm" type="text" inputmode="decimal" value="{{ d.cable_dc_mm }}" required><span class="ig-text">mm</span></div></div>
+
+        <div class="field h f6"><label for="earth_make">Earthing cable make</label>
           <input id="earth_make" name="earth_make" type="text" value="{{ d.earth_make }}" required maxlength="80"></div>
-        <div class="field h f2"><label for="earth_mm">Earthing (mm)</label>
-          <input id="earth_mm" name="earth_mm" type="text" inputmode="decimal" value="{{ d.earth_mm }}" required></div>
-        <div class="field f4"><label for="structure_make">GI structure make</label>
+        <div class="field h f6"><label for="earth_mm">Earthing cable size</label>
+          <div class="ig"><input id="earth_mm" name="earth_mm" type="text" inputmode="decimal" value="{{ d.earth_mm }}" required><span class="ig-text">mm</span></div></div>
+
+        <div class="field h f6"><label for="la_make">LA cable make</label>
+          <input id="la_make" name="la_make" type="text" value="{{ d.la_make }}" required maxlength="80"></div>
+        <div class="field h f6"><label for="la_mm">LA cable size</label>
+          <div class="ig"><input id="la_mm" name="la_mm" type="text" inputmode="decimal" value="{{ d.la_mm }}" required><span class="ig-text">mm</span></div></div>
+
+        <div class="field h f6"><label for="structure_make">GI structure make</label>
           <input id="structure_make" name="structure_make" type="text" value="{{ d.structure_make }}" required maxlength="80"></div>
-        <div class="field h f2"><label for="structure_height">Height (ft)</label>
-          <input id="structure_height" name="structure_height" type="text" value="{{ d.structure_height }}" required maxlength="20"></div>
+        <div class="field h f6"><label for="gi_pipe">GI pipe</label>
+          <input id="gi_pipe" name="gi_pipe" type="text" value="{{ d.gi_pipe }}" required maxlength="40" autocapitalize="characters"></div>
+
+        <div class="field h f6"><label for="thickness">Thickness</label>
+          <div class="ig"><input id="thickness" name="thickness" type="text" inputmode="decimal" value="{{ d.thickness }}" required><span class="ig-text">mm</span></div></div>
+        <div class="field h f6"><label for="structure_height">Height</label>
+          <div class="ig"><input id="structure_height" name="structure_height" type="text" value="{{ d.structure_height }}" required maxlength="20"><span class="ig-text">ft</span></div></div>
+
+        <div class="field"><label for="conduit_make">PVC conduit pipe make</label>
+          <input id="conduit_make" name="conduit_make" type="text" value="{{ d.conduit_make }}" required maxlength="80"></div>
       </div>
     </section>
 
@@ -201,12 +218,21 @@
     <section class="card" id="s6">
       {{ pill('06', 'Warranty Details') }}
       <div class="row">
-        <div class="field f6"><label for="warranty_panel">Solar panel (item name)</label>
+        <div class="field f8"><label for="warranty_panel">Solar panel (item name)</label>
           <input id="warranty_panel" name="warranty_panel" type="text" value="{{ d.warranty_panel }}" required maxlength="80">
           <span class="hint">Auto-filled from module make. Editable.</span></div>
-        <div class="field f6"><label for="warranty_inverter">Inverter (item name)</label>
+        <div class="field h f4"><label for="warranty_panel_years">Panel warranty</label>
+          <div class="ig"><input id="warranty_panel_years" name="warranty_panel_years" type="text" inputmode="numeric" value="{{ d.warranty_panel_years }}" required><span class="ig-text">Years</span></div></div>
+
+        <div class="field f8"><label for="warranty_inverter">Inverter (item name)</label>
           <input id="warranty_inverter" name="warranty_inverter" type="text" value="{{ d.warranty_inverter }}" required maxlength="80">
           <span class="hint">Auto-filled from inverter make and kW. Editable.</span></div>
+        <div class="field h f4"><label for="warranty_inverter_years">Inverter warranty</label>
+          <div class="ig"><input id="warranty_inverter_years" name="warranty_inverter_years" type="text" inputmode="numeric" value="{{ d.warranty_inverter_years }}" required><span class="ig-text">Years</span></div></div>
+
+        <div class="field h f4"><label for="warranty_service_years">All service warranty</label>
+          <div class="ig"><input id="warranty_service_years" name="warranty_service_years" type="text" inputmode="numeric" value="{{ d.warranty_service_years }}" required><span class="ig-text">Years</span></div>
+          <span class="hint">Service given by vendor.</span></div>
       </div>
     </section>
 

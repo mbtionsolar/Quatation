@@ -1,0 +1,22 @@
+# Render Blueprint: Dashboard -> New -> Blueprint -> select this repo.
+# Runs from the Dockerfile (LibreOffice is needed to make the PDF).
+services:
+  - type: web
+    name: mbtion-quotation
+    runtime: docker
+    plan: free
+    region: singapore              # closest Render region to India (lower delay)
+    healthCheckPath: /healthz
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true        # Render creates a long random value for you
+      - key: ADMIN_USERNAME
+        sync: false                # you type it in the Render dashboard
+      - key: ADMIN_PASSWORD
+        sync: false                # you type it in the Render dashboard (use a strong one)
+      - key: PDF_TIMEOUT
+        value: "60"                # seconds LibreOffice may take for one PDF
+      - key: PDF_WARMUP
+        value: "1"                 # pre-start the PDF engine when the server boots
+      - key: LOG_LEVEL
+        value: INFO

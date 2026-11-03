@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Logged out{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+{% block content %}
+<main class="auth auth-single">
+  <div class="auth-main">
+    <div class="auth-card auth-done">
+      <div class="done-ico">{{ ico('check') }}</div>
+      <h2>You have been logged out</h2>
+      <p class="sub">Your session has ended safely. Login again to create a new quotation.</p>
+      <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg btn-block">Login again</a>
+    </div>
+    <p class="auth-foot">&copy; MBTION Engineering</p>
+  </div>
+</main>
+{% endblock %}

@@ -20,7 +20,7 @@ DEFAULTS = {
     "structure_height": "6/4", "conduit_make": "Polycab",
     "pricing_mode": "total_to_rate", "rate": "", "amount": "", "gst_amount": "", "total_cost": "",
     "warranty_panel": "", "warranty_panel_years": "25",
-    "warranty_inverter": "", "warranty_inverter_years": "07", "warranty_service_years": "05",
+    "warranty_inverter": "Solaryaan", "warranty_inverter_years": "07", "warranty_service_years": "05",
     "contact_name": "JANAK JOSHI", "contact_mobile": "8320565108",
 }
 

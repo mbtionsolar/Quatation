@@ -5,6 +5,16 @@ Quotation ab **PDF** mein milta hai (Download aur Share dono PDF). Design aapke 
 server us template ko bharke LibreOffice se PDF bana deta hai.
 Sirf website ka UI naya hai; 3 pages wahi hain: **Login, Quotation form, Logout**.
 
+## Commercial / Residential + Panel type (naya)
+- **Quotation type** dropdown (Section 01): **Commercial** ya **Residential**. Har type ka apna Word design hai
+  (`docx_template/quotation_commercial.docx`, `docx_template/quotation_residential.docx`), apni **Terms & Conditions** list aur apni
+  **Documents required** list. Type badalte hi form ki Terms list badal jaati hai (har type ki tick/untick alag yaad rehti hai).
+- **Panel type** dropdown (Section 03, PV module make ke saath): **Topcon Mono** ya **Mono PERC**. PDF mein "PV Module Topcon Mono - 540 Wp" ki tarah chhapta hai.
+- **Subsidy** (sirf Residential, Section 04): subsidy amount likho (0 = koi subsidy nahi). PDF mein *Subsidy* aur *Amount After Subsidy*
+  (= total cost - subsidy) dikhta hai. Subsidy total se kam honi chahiye. Commercial mein ye rows hoti hi nahi.
+- PDF ka naam: `Quotation_<Type>_<Customer>_<kW>kW_<date>.pdf` (jaise `Quotation_Residential_Sanjay_Thakor_4.32kW_10-11-2026.pdf`).
+  PDF ke andar Customer name, Project capacity aur quotation type (title mein) chhapte hain.
+
 ## Naya UI (kya kya milega)
 - Mobile-first, fully responsive (phone / tablet / laptop), bade touch-friendly buttons, koi Bootstrap/CDN nahi (fast + offline-safe CSS)
 - Form ke upar section chips (Customer, Capacity, Specs...) jisse seedha us section par jaa sakte ho, poora hone par chip hara ho jaata hai
@@ -87,14 +97,14 @@ aur user ko chhota **ref** milta hai (jaise `ref: 3fa91c0b`), Logs mein usi ref 
 | "The server is starting up or busy" | Free plan jaag raha hai. 30 sec ruk ke Download dobara dabao |
 | "The server is busy making another quotation" | Ek saath do PDF; kuch second baad dobara |
 | "PDF creation took too long" | Pehli baar slow ho sakta hai; dobara try karo. Roz hota ho to `PDF_TIMEOUT` badhao ya paid plan lo |
-| "Word template is missing or damaged" | `docx_template/quotation_template.docx` wapas rakho; `/readyz` se confirm karo |
+| "Word template is missing or damaged" | `docx_template/quotation_commercial.docx` aur `quotation_residential.docx` wapas rakho (na ho to `python tools/build_template.py`); `/readyz` se confirm karo |
 | "Something went wrong (ref: ...)" | Render -> Logs mein ref search karo |
 
 ### Tests
 ```bash
 python -m unittest discover -s tests -v
 ```
-39 checks (galat input, session, template, PDF engine, login lock, asli PDF, **Residential subsidy vs Commercial**). LibreOffice na ho to asli-PDF wala test apne aap skip ho jaata hai.
+36 checks (galat input, session, Commercial/Residential templates, panel type, subsidy, template, PDF engine, login lock, asli PDF). LibreOffice na ho to asli-PDF wala test apne aap skip ho jaata hai.
 
 ## Future mobile app
 - Abhi: PWA (Home screen par install). Android/iOS store app chahiye to isi site ko Capacitor/TWA se wrap kar sakte ho, backend wahi rahega.
@@ -105,21 +115,12 @@ Aapke sample quotation ke numbers (5,23,000 / 31,236.24 / 4,80,257.19 / 42,742.8
 - **Total pata hai**: total (GST ke saath) daalo -> rate = total / 1.089 / kW, amount = kW x rate, GST = 8.9% of amount.
 - **Rate pata hai**: rate/kW daalo -> amount, GST aur total (nearest rupee) nikalte hain.
 - **Manual**: saare amounts khud type karo.
+- **Residential subsidy**: Amount After Subsidy = Total project cost (GST ke saath) - Subsidy (jaise 2,00,000 - 78,000 = 1,22,000).
 Numbers Indian format (lakh/crore commas) mein print hote hain. GST % `quotation.py` mein `GST_PERCENT` se badal sakte hain
 (Word template mein "GST @ 8.9%" text fixed hai, use bhi Word mein edit karna hoga).
 
-### Subsidy - sirf Residential mein
-- **Project type** ab dropdown hai: Residential / Commercial / Industrial / Agricultural (galat spelling se subsidy chupchap miss na ho, isliye free text nahi).
-- **Residential** chuna to Section 04 mein **Subsidy** field aata hai (default **Rs 78,000**, zarurat ho to edit kar sakte ho, jaise 3 kW se chhote system ke liye).
-  Quotation ki rates table mein GST ke neeche 2 rows jud jaati hain: **Subsidy (-)78,000/-** aur **Amount After Subsidy 1,22,000/-**.
-  "TOTAL PROJECT COST (INCLUDING GST)" pehle jaisa poora total hi dikhata hai (sample: 2,00,000 - 78,000 = 1,22,000).
-- **Commercial / Industrial / Agricultural** mein subsidy field, summary rows aur PDF ki dono rows **bilkul nahi** aati; table GST par hi khatam hoti hai.
-- Subsidy total se kam honi chahiye (warna error). Live summary, Review sheet aur WhatsApp/Email/Copy text mein bhi subsidy sirf Residential mein aata hai.
-- Default amount badalna ho to `quotation.py` mein `SUBSIDY_RESIDENTIAL`. Rates line ab project type ke hisaab se "...Solar Power for RESIDENTIAL / COMMERCIAL" likhti hai.
-- `/api/calc` mein `project_type` (aur optional `subsidy`) bhejo to `subsidy_amount` aur `after_subsidy` bhi milte hain.
-
 ## Terms & Conditions (tick / untick)
-Form ke section 05 mein Word template ki saari Terms & Conditions checkbox ke saath dikhti hain, shuru mein **sab tick** hoti hain.
+Form ke section 05 mein **chune hue quotation type** (Commercial / Residential) ke Word template ki saari Terms & Conditions checkbox ke saath dikhti hain, shuru mein **sab tick** hoti hain.
 Jo term nahi chahiye use untick karein (ya "Deselect all" dabake sirf kuch tick karein). Quotation mein sirf tick wali terms aati hain
 aur Sr. number apne aap 1, 2, 3... ho jaata hai. Row ki formatting (borders, yellow highlight) bilkul same rehti hai.
 Kam se kam ek term tick honi chahiye (ya ek extra condition likhi honi chahiye). Term ka text form mein template se hi aata hai, isliye Word template mein text badlenge to form mein bhi badal jayega.
@@ -129,32 +130,39 @@ Har T&C line ke saath **Highlight** ka tick hai (extra conditions ke saath bhi).
 (`FFF2CC`) ho jayegi; tick nahi karoge to row normal rehti hai. Form mein bhi row usi rang mein dikhti hai. Rang badalna ho to
 `docxfill.py` mein `HIGHLIGHT_FILL` aur `static/css/style.css` ke `#FFF2CC` badlo. Untick ki hui term par highlight ka koi asar nahi hota.
 
-### Extra conditions (17, 18, 19, 20)
-Terms & Conditions ke neeche **Additional conditions** ke 4 boxes hain. Jo likhoge wo tick ki hui terms ke baad agle number se print hoga
-(sab 16 tick hon to 17, 18, 19, 20; 3 terms untick karoge to 14, 15...). Khali box print nahi hota. Zyada se zyada 4 conditions, har ek 200 characters tak.
-Ye Word template ke T&C table ki aakhri 4 khali rows mein jaati hain. Agar kam/zyada slot chahiye to Word mein khali rows kam/zyada karke
-`python tools/build_template.py "naya_word_file.docx"` chalao, aur `CUSTOM_TERMS_MAX` (quotation.py) badlo.
+### Extra conditions (19, 20, 21, 22)
+Terms & Conditions ke neeche **Additional conditions** ke 4 boxes hain (dono types mein). Jo likhoge wo tick ki hui terms ke baad agle number se print hoga
+(sab 18 tick hon to 19, 20, 21, 22; 3 terms untick karoge to 16, 17...). Khali box print nahi hota. Zyada se zyada 4 conditions, har ek 200 characters tak.
+Ye Word template ke T&C table ki aakhri 4 khali rows mein jaati hain (`tools/build_template.py` ye rows apne aap jodta hai).
+Kam/zyada slot chahiye to `CUSTOM_SLOTS` (tools/build_template.py) aur `CUSTOM_TERMS_MAX` (quotation.py) badlo, phir tool dobara chalao.
 
-### Warranty hamesha next page par
-T&C kitni bhi rows ki ho (1 se 20), "06 Warranty Details" hamesha page 3 se shuru hota hai. Iske liye template mein T&C table ke baad
-ke pehle khali paragraph par "page break before" laga hai (`tools/build_template.py` ye apne aap lagata hai).
+### Note: Word file ka layout
+Naye Word files mein Terms & Conditions sabse aakhir mein (page 3) hain, isliye pehle wala "Warranty next page par" page-break ab nahi lagta.
+Section numbers Word file mein jaise hain waise hi hain (04, 06, 07, 08, 05) - app unhe nahi badalta; chaho to Word mein number theek kar lo.
 
 ## Word template badalna
-`docx_template/quotation_template.docx` hi quotation ka design hai. Isse Word mein khol ke koi bhi text/format badal sakte hain.
-Sirf `{{field_name}}` wale tokens ko mat todna. Fields: project_type, project_type_caps, customer_name, customer_address, module_qty,
-module_wp, capacity_kw, module_make, inverter_make, inverter_qty, inverter_kw, acdb_make, dcdb_make, cable_make, cable_ac_mm, cable_dc_mm,
+`docx_template/quotation_commercial.docx` aur `docx_template/quotation_residential.docx` hi quotation ke design hain. Inhe Word mein khol ke koi bhi
+text/format badal sakte hain. Sirf `{{field_name}}` wale tokens ko mat todna. Fields: customer_name, customer_address, module_qty,
+module_wp, panel_type, capacity_kw, module_make, inverter_make, inverter_qty, inverter_kw, acdb_make, dcdb_make, cable_make, cable_ac_mm, cable_dc_mm,
 earth_make, earth_mm, la_make, la_mm, structure_make, gi_pipe, thickness, structure_height, conduit_make, rate, amount, subtotal, gst_amount,
-subsidy_amount, after_subsidy, total_cost, warranty_panel, warranty_panel_years, warranty_inverter, warranty_inverter_years, warranty_service_years, contact_name, contact_mobile, custom_term_1 ... custom_term_4.
+total_cost, warranty_panel, warranty_panel_years, warranty_inverter, warranty_inverter_years, warranty_service_years, contact_name, contact_mobile, custom_term_1 ... custom_term_4.
 
 Form ke Specs section ka order haath se likhe paper ke hisaab se hai: Inverter make / INV qty / Inverter kW, ACDB / DCDB, Cables make,
 AC / DC size, Earthing make / size, LA make / size, GI structure make / GI pipe, Thickness / Height.
 
-Naya field jodne ke liye: (1) Word template mein `{{naya_field}}` likho, (2) `templates/form.html` mein input jodo (name="naya_field"),
+Naya field jodne ke liye: (1) **dono** Word templates mein `{{naya_field}}` likho, (2) `templates/form.html` mein input jodo (name="naya_field"),
 (3) `quotation.py` ke `TEXT_FIELDS` aur `DEFAULTS` mein add karo.
+
+### Word design badalna (do tareeke)
+1. **Seedha tokenised template edit karo**: `docx_template/quotation_commercial.docx` / `quotation_residential.docx` Word mein kholo, text/format badlo,
+   bas `{{...}}` tokens mat todna.
+2. **Original se dobara banao**: `docx_template/originals/commercial.docx` / `residential.docx` (jisme `<placeholder>` likhe hain) edit karo, phir
+   `python tools/build_template.py` chalao - dono templates dobara ban jaate hain. Sirf ek banana ho: `python tools/build_template.py residential "file.docx"`.
+   Naya `<placeholder>` jodoge to `tools/build_template.py` ke `RULES` mein uska rule bhi jodna hoga (tool bata deta hai kaun sa placeholder bina rule ka hai).
 
 ## Files
 - `app.py` - routes: /login, /quotation, /generate, /api/calc, /logout, /healthz, /readyz, error handlers, PWA (/manifest.webmanifest, /sw.js), security (CSRF, CSP, session)
-- `quotation.py` - validation + pricing + number format
+- `quotation.py` - validation (quotation type, panel type, subsidy) + pricing + number format
 - `pdfconv.py` - filled Word file -> PDF (LibreOffice)
 - `Dockerfile` - LibreOffice + fonts ke saath server image (normal user, healthcheck)
 - `gunicorn.conf.py` - server settings (1 worker, 4 threads, logs stdout par)
@@ -164,8 +172,8 @@ Naya field jodne ke liye: (1) Word template mein `{{naya_field}}` likho, (2) `te
 - `static/css/style.css` - poora design system (colours, buttons, form, review sheet)
 - `static/js/form.js` - pricing, terms, validation, **review + download + share**; `login.js`, `pwa.js`, `sw.js`; `templates/error.html` friendly error page
 - `vercel.json`, `render.yaml`, `Procfile` - hosting config
-- `tools/build_template.py` - original `<...>` wali Word file se template banane ka tool (ek baar chala chuka hai)
-- `tools/add_subsidy_rows.py` - Residential Word file se "Subsidy" + "Amount After Subsidy" rows template mein jodta hai (ek baar chala chuka hai; build_template.py se template dobara banao to ye bhi dobara chalao)
+- `docx_template/` - `quotation_commercial.docx`, `quotation_residential.docx` (app inhe bharta hai) aur `originals/` (`<...>` wali original Word files)
+- `tools/build_template.py` - original `<...>` wali Word files se dono `{{token}}` templates banane ka tool
 
 ## Brand colours badalna
 `static/css/style.css` ke sabse upar `:root` mein `--navy`, `--orange`, `--hl` badlo, poori site ka rang badal jaayega.

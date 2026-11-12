@@ -31,7 +31,7 @@
 
 {% block content %}
 <main class="page" id="app" data-calc-url="{{ url_for('api_calc') }}" data-login-url="{{ url_for('login') }}"
-      data-gst="{{ gst }}" data-terms-total="{{ terms|length }}" data-subsidy-type="{{ subsidy_type }}">
+      data-gst="{{ gst }}">
 
   <div class="page-head">
     <h1>Create Quotation</h1>
@@ -59,12 +59,11 @@
       {{ pill('01', 'Customer Details') }}
       <div class="row">
         <div class="field f4">
-          <label for="project_type">Project type</label>
+          <label for="project_type">Quotation type</label>
           <select id="project_type" name="project_type" required>
-            <option value="" disabled{% if not d.project_type %} selected{% endif %}>Select project type</option>
-            {% for t in project_types %}<option value="{{ t }}"{% if d.project_type == t %} selected{% endif %}>{{ t }}</option>{% endfor %}
+            {% for t in types %}<option value="{{ t }}"{% if t == d.project_type %} selected{% endif %}>{{ t }}</option>{% endfor %}
           </select>
-          <span class="hint">Subsidy is deducted only for {{ subsidy_type }}.</span>
+          <span class="hint">Commercial and Residential use their own quotation design, Terms and Documents list.</span>
         </div>
         <div class="field f8">
           <label for="customer_name">Customer name</label>
@@ -82,10 +81,6 @@
       {{ pill('02', 'Project Capacity') }}
       <div class="row">
         <div class="field h f4">
-
-           <div class="field"><label for="module_make">PV module make</label>
-          <input id="module_make" name="module_make" type="text" value="{{ d.module_make }}" required maxlength="80"></div>
-
           <label for="module_qty">No. of PV modules</label>
           <input id="module_qty" name="module_qty" type="number" min="1" step="1" inputmode="numeric" value="{{ d.module_qty }}" required>
         </div>
@@ -105,11 +100,16 @@
     <section class="card" id="s3">
       {{ pill('03', 'Project Specifications') }}
       <div class="row">
-       
+        <div class="field h f6"><label for="module_make">PV module make</label>
+          <input id="module_make" name="module_make" type="text" value="{{ d.module_make }}" required maxlength="80"></div>
+        <div class="field h f6"><label for="panel_type">Panel type</label>
+          <select id="panel_type" name="panel_type" required>
+            {% for t in panel_types %}<option value="{{ t }}"{% if t == d.panel_type %} selected{% endif %}>{{ t }}</option>{% endfor %}
+          </select></div>
 
         <div class="field f6"><label for="inverter_make">Inverter make</label>
           <input id="inverter_make" name="inverter_make" type="text" value="{{ d.inverter_make }}" required maxlength="80"></div>
-        <div class="field h f3"><label for="inverter_qty">Inverter Quantity</label>
+        <div class="field h f3"><label for="inverter_qty">INV qty</label>
           <input id="inverter_qty" name="inverter_qty" type="text" inputmode="numeric" value="{{ d.inverter_qty }}" required></div>
         <div class="field h f3"><label for="inverter_kw">Inverter kW</label>
           <div class="ig"><input id="inverter_kw" name="inverter_kw" type="text" inputmode="decimal" value="{{ d.inverter_kw }}" required><span class="ig-text">kW</span></div></div>
@@ -119,7 +119,7 @@
         <div class="field h f6"><label for="dcdb_make">DCDB make</label>
           <input id="dcdb_make" name="dcdb_make" type="text" value="{{ d.dcdb_make }}" required maxlength="80"></div>
 
-        <div class="field"><label for="cable_make">AC/DC Cables make</label>
+        <div class="field"><label for="cable_make">Cables make</label>
           <input id="cable_make" name="cable_make" type="text" value="{{ d.cable_make }}" required maxlength="80"></div>
 
         <div class="field h f6"><label for="cable_ac_mm">AC cable size</label>
@@ -173,36 +173,45 @@
         <div class="field"><label for="gst_amount">GST @ {{ gst }}% (&#8377;)</label>
           <input id="gst_amount" name="gst_amount" type="text" inputmode="decimal" readonly></div>
       </div>
-      <div class="price-grid subsidy-box" id="subsidy-box" hidden>
-        <div class="field wide"><label for="subsidy">Subsidy (&#8377;) <span class="muted fw-normal">&ndash; {{ subsidy_type }} only</span></label>
-          <input id="subsidy" name="subsidy" type="text" inputmode="decimal" value="{{ d.subsidy }}" disabled>
-          <span class="hint" id="subsidy-hint">Default &#8377;{{ '{:,}'.format(subsidy_default) }} (editable).</span></div>
-        <div class="field wide"><label for="after_subsidy">Amount after subsidy (&#8377;)</label>
-          <input id="after_subsidy" type="text" inputmode="decimal" readonly tabindex="-1">
-          <span class="hint">Total &minus; subsidy = customer pays.</span></div>
-      </div>
       <p class="calc-hint" id="calc-hint">Amount = capacity &times; rate. GST @ {{ gst }}% is applied on the amount. Total is rounded to the nearest rupee.</p>
+
+      <!-- Residential only: printed as "Subsidy" and "Amount After Subsidy" under the GST line -->
+      <div class="subsidy-box" id="subsidy-box" data-types="{{ subsidy_types|join(',') }}"{% if d.project_type not in subsidy_types %} hidden{% endif %}>
+        <div class="price-grid">
+          <div class="field wide"><label for="subsidy">Subsidy (&#8377;)</label>
+            <input id="subsidy" name="subsidy" type="text" inputmode="decimal" value="{{ d.subsidy }}" placeholder="e.g. 78,000" required{% if d.project_type not in subsidy_types %} disabled{% endif %}>
+            <span class="hint">Printed as (&minus;) subsidy. Enter 0 if there is no subsidy.</span></div>
+          <div class="field wide"><label for="amount_after_subsidy">Amount after subsidy (&#8377;)</label>
+            <input id="amount_after_subsidy" name="amount_after_subsidy" type="text" inputmode="decimal" readonly tabindex="-1"{% if d.project_type not in subsidy_types %} disabled{% endif %}>
+            <span class="hint">Total cost &minus; subsidy. Calculated for you.</span></div>
+        </div>
+      </div>
     </section>
 
     <!-- 5 -->
     <section class="card" id="s5">
       {{ pill('05', 'Terms & Conditions') }}
       <div class="terms-bar">
-        <span class="badge" id="terms-count" aria-live="polite">{{ terms|length }} of {{ terms|length }} selected</span>
+        <span class="badge" id="terms-count" aria-live="polite">{{ terms_by_type[d.project_type]|length }} of {{ terms_by_type[d.project_type]|length }} selected</span>
         <button type="button" class="btn btn-sm btn-outline" id="terms-all">Select all</button>
         <button type="button" class="btn btn-sm btn-outline" id="terms-none">Deselect all</button>
         <span class="terms-note">Only ticked terms are printed and numbers re-arrange automatically. Use <strong>Highlight</strong> to shade a whole line light orange.</span>
       </div>
       <div class="terms" id="terms-box">
-        {% for t in terms %}
-        <div class="term">
-          <label class="term-main" for="term{{ loop.index }}">
-            <input class="chk" type="checkbox" name="terms" value="{{ loop.index }}" id="term{{ loop.index }}" checked>
-            <span class="term-no">{{ loop.index }}</span><span class="term-text">{{ t }}</span>
-          </label>
-          <label class="term-hl" title="Highlight this whole line in light orange">
-            <input class="chk chk-orange" type="checkbox" name="highlight" value="{{ loop.index }}"><span>Highlight</span>
-          </label>
+        {% for qtype, terms in terms_by_type.items() %}
+        {% set active = (qtype == d.project_type) %}
+        <div class="terms-set" data-type="{{ qtype }}"{% if not active %} hidden{% endif %}>
+          {% for t in terms %}
+          <div class="term">
+            <label class="term-main" for="term-{{ qtype|lower }}-{{ loop.index }}">
+              <input class="chk" type="checkbox" name="terms" value="{{ loop.index }}" id="term-{{ qtype|lower }}-{{ loop.index }}" checked{% if not active %} disabled{% endif %}>
+              <span class="term-no">{{ loop.index }}</span><span class="term-text">{{ t }}</span>
+            </label>
+            <label class="term-hl" title="Highlight this whole line in light orange">
+              <input class="chk chk-orange" type="checkbox" name="highlight" value="{{ loop.index }}"{% if not active %} disabled{% endif %}><span>Highlight</span>
+            </label>
+          </div>
+          {% endfor %}
         </div>
         {% endfor %}
       </div>
@@ -213,7 +222,7 @@
         <p class="hint custom-help">Type your own condition. It prints after the ticked terms with the next number. Leave a box empty to skip it.</p>
         {% for i in range(1, custom_slots + 1) %}
         <div class="custom-row">
-          <span class="custom-no is-idle" aria-hidden="true">{{ terms|length + i }}</span>
+          <span class="custom-no is-idle" aria-hidden="true">{{ terms_by_type[d.project_type]|length + i }}</span>
           <div class="field"><input type="text" name="custom_term_{{ i }}" maxlength="{{ custom_len }}" placeholder="Extra condition {{ i }}" aria-label="Extra condition {{ i }}" autocomplete="off"></div>
           <label class="term-hl" title="Highlight this whole line in light orange">
             <input class="chk chk-orange" type="checkbox" name="custom_hl_{{ i }}" value="1"><span>Highlight</span>
@@ -268,11 +277,12 @@
       <div class="summary-total"><small>Total (incl. GST)</small><strong data-sum="total">&#8377; &ndash;</strong></div>
       <dl>
         <dt>Capacity</dt><dd data-sum="capacity">&ndash;</dd>
+        <dt>Panel type</dt><dd data-sum="panel">&ndash;</dd>
         <dt>Rate / kW</dt><dd data-sum="rate">&ndash;</dd>
         <dt>Sub-total</dt><dd data-sum="amount">&ndash;</dd>
         <dt>GST @ {{ gst }}%</dt><dd data-sum="gst">&ndash;</dd>
-        <dt data-sub-only hidden>Subsidy</dt><dd data-sum="subsidy" data-sub-only hidden>&ndash;</dd>
-        <dt data-sub-only hidden>After subsidy</dt><dd data-sum="after" data-sub-only hidden>&ndash;</dd>
+        <dt data-sub-only{% if d.project_type not in subsidy_types %} hidden{% endif %}>Subsidy</dt><dd data-sub-only data-sum="subsidy"{% if d.project_type not in subsidy_types %} hidden{% endif %}>&ndash;</dd>
+        <dt data-sub-only{% if d.project_type not in subsidy_types %} hidden{% endif %}>After subsidy</dt><dd data-sub-only data-sum="after"{% if d.project_type not in subsidy_types %} hidden{% endif %}>&ndash;</dd>
         <dt>Terms</dt><dd data-sum="terms">&ndash;</dd>
       </dl>
       {{ actions() }}

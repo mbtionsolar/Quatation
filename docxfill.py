@@ -152,6 +152,17 @@ def find_terms_table(root):
     return None
 
 
+def find_spec_table(root):
+    """The Project Specifications table = the one whose header row reads 'Sr.' | 'Parameter' | 'Qty' | 'Make'."""
+    for tbl in root.iter(_q("tbl")):
+        rows = tbl.findall(_q("tr"))
+        if len(rows) > 1:
+            head = [_cell_text(tc).strip().lower() for tc in rows[0].findall(_q("tc"))]
+            if head[:3] == ["sr.", "parameter", "qty"]:
+                return tbl
+    return None
+
+
 def split_term_rows(tbl):
     """(standard term rows, extra-condition slot rows) - a slot row holds a {{custom_term_N}} token."""
     standard, slots = [], []
@@ -216,24 +227,8 @@ def apply_terms(root, keep=None, custom_count=0, highlight=None, custom_highligh
                 borders.remove(old)
 
 
-SUBSIDY_ROW = re.compile(r"\{\{\s*(subsidy_amount|after_subsidy)\s*\}\}")
-
-
-def apply_subsidy(root, show):
-    """The rates table has two subsidy rows ("Subsidy" and "Amount After Subsidy", holding the tokens
-    {{subsidy_amount}} / {{after_subsidy}}). They are printed only for a Residential project: when show is
-    False both rows are removed whole, so the table ends with the GST row exactly like a plain commercial quote."""
-    if show:
-        return
-    rows = [tr for tr in root.iter(_q("tr")) if SUBSIDY_ROW.search("".join(t.text or "" for t in tr.iter(_q("t"))))]
-    for tr in rows:
-        tr.getparent().remove(tr)
-
-
-def fill_docx(template_path, values, keep_terms=None, custom_count=0, highlight_terms=None, highlight_custom=None,
-              show_subsidy=False):
+def fill_docx(template_path, values, keep_terms=None, custom_count=0, highlight_terms=None, highlight_custom=None):
     """Fill {{key}} tokens in the template. Unknown tokens become empty.
-    show_subsidy: keep the Subsidy / Amount After Subsidy rows (Residential only); False removes them.
     keep_terms: optional iterable of 1-based standard Terms & Conditions numbers to keep (None = keep all).
     custom_count: how many of the extra-condition rows (custom_term_1..N) are filled; the rest are removed.
     highlight_terms / highlight_custom: standard term numbers / extra-condition positions to shade light orange."""
@@ -242,7 +237,6 @@ def fill_docx(template_path, values, keep_terms=None, custom_count=0, highlight_
     def transform(name, root):
         if name == "word/document.xml":
             apply_terms(root, keep_terms, custom_count, highlight_terms, highlight_custom)
-            apply_subsidy(root, show_subsidy)
         for p in root.iter("{%s}p" % W):
             replace_in_paragraph(p, TOKEN, lambda m, _full: clean.get(m.group(1), ""))
 

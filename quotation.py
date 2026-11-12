@@ -4,23 +4,21 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 GST_PERCENT = Decimal("8.9")      # same blended GST shown in the Word template ("GST @ 8.9%")
 
-# Subsidy rule: ONLY a Residential project gets the government subsidy deducted (Subsidy + "Amount After Subsidy"
-# rows in the quotation). Commercial / Industrial / Agricultural never get it.
-PROJECT_TYPES = ("Residential", "Commercial", "Industrial", "Agricultural")
-SUBSIDY_PROJECT_TYPE = "Residential"
-SUBSIDY_RESIDENTIAL = Decimal("78000")      # default subsidy (Rs) for a Residential project; editable in the form
+QUOTATION_TYPES = ("Commercial", "Residential")      # one Word design each: docx_template/quotation_<type>.docx
+PANEL_TYPES = ("Topcon Mono", "Mono PERC")            # dropdown on the form, printed as "PV Module <type> - <Wp> Wp"
+SUBSIDY_TYPES = ("Residential",)                      # only these quotations have the Subsidy rows
 
 DEFAULTS = {
-    "project_type": "", "customer_name": "", "customer_address": "",
-    "module_qty": "", "module_wp": "", "capacity_kw": "",
-    "module_make": "", "inverter_make": "", "inverter_qty": "01", "inverter_kw": "",
+    "project_type": "Commercial", "customer_name": "", "customer_address": "",
+    "panel_type": "Topcon Mono", "subsidy": "78000",
+    "module_qty": "25", "module_wp": "615", "capacity_kw": "15.375",
+    "module_make": "WAAREE ENERGY LTD", "inverter_make": "Solaryaan", "inverter_qty": "01", "inverter_kw": "15.00",
     "acdb_make": "Havells", "dcdb_make": "Havells",
-    "cable_make": "Polycab", "cable_ac_mm": "", "cable_dc_mm": "",
-    "earth_make": "Polycab", "earth_mm": "", "la_make": "Polytech", "la_mm": "",
+    "cable_make": "Polycab", "cable_ac_mm": "6", "cable_dc_mm": "4",
+    "earth_make": "Polycab", "earth_mm": "6", "la_make": "Polytech", "la_mm": "16",
     "structure_make": "Apollo/Hindustar", "gi_pipe": "40X40 & 40X60", "thickness": "2",
     "structure_height": "6/4", "conduit_make": "Polycab",
     "pricing_mode": "total_to_rate", "rate": "", "amount": "", "gst_amount": "", "total_cost": "",
-    "subsidy": "78,000",
     "warranty_panel": "WAAREE 615Wp", "warranty_panel_years": "25",
     "warranty_inverter": "Solaryaan 15.00 KW", "warranty_inverter_years": "07", "warranty_service_years": "05",
     "contact_name": "JANAK JOSHI", "contact_mobile": "8320565108",
@@ -57,17 +55,6 @@ MOBILE = re.compile(r"^[0-9]{10}$")
 
 def clean(value):
     return re.sub(r"\s+", " ", value or "").strip()
-
-
-def normalize_project_type(value):
-    """'residential ' -> 'Residential'. None when it is not one of PROJECT_TYPES."""
-    v = clean(value).casefold()
-    return next((t for t in PROJECT_TYPES if t.casefold() == v), None)
-
-
-def has_subsidy(project_type):
-    """True only for a Residential project."""
-    return normalize_project_type(project_type) == SUBSIDY_PROJECT_TYPE
 
 
 def parse_amount(value, label, lo=Decimal("0.01"), hi=Decimal("1e11")):
@@ -107,12 +94,10 @@ def fmt_total(d):
     return fmt_inr(d, 0 if d == d.to_integral_value() else 2)
 
 
-def compute_pricing(mode, capacity, form, with_subsidy=False):
+def compute_pricing(mode, capacity, form):
     """Returns (strings_for_template, {field: error}). Mirrors how the sample quote was made:
     total_to_rate: enter the round total -> rate is back-calculated.
-    rate_to_total: enter rate per kW -> total is calculated and rounded to the rupee.
-    with_subsidy (Residential only): subsidy_amount = form["subsidy"] (default Rs 78,000) and
-    after_subsidy = total - subsidy. A bad subsidy still returns the normal pricing, plus {"subsidy": error}."""
+    rate_to_total: enter rate per kW -> total is calculated and rounded to the rupee."""
     gst = GST_PERCENT / 100
     try:
         if mode == "total_to_rate":
@@ -144,22 +129,24 @@ def compute_pricing(mode, capacity, form, with_subsidy=False):
             field = next((f for f, l in (("rate", "Rate"), ("amount", "Amount"), ("gst_amount", "GST"),
                                          ("total_cost", "Total")) if msg.startswith(l)), "rate")
         return None, {field: msg}
-    out = {
+    return {
         "rate": fmt_inr(rate), "amount": fmt_inr(amount), "subtotal": fmt_inr(amount),
         "gst_amount": fmt_inr(gst_amt), "total_cost": fmt_total(total),
-        "subsidy_amount": "", "after_subsidy": "",          # blank = no subsidy rows in the quotation
-    }
-    if not with_subsidy:
-        return out, {}
+    }, {}
+
+
+def compute_subsidy(total_text, subsidy_text):
+    """Residential only. Returns ({"subsidy", "amount_after_subsidy"} strings, error message or None).
+    Amount after subsidy = total project cost (incl. GST) - subsidy, as in the Word sample (2,00,000 - 78,000 = 1,22,000)."""
+    text = re.sub(r"[,\s₹]", "", subsidy_text or "").rstrip("/-")
     try:
-        subsidy = parse_amount(clean(form.get("subsidy")) or str(SUBSIDY_RESIDENTIAL), "Subsidy")
+        total = parse_amount(total_text, "Total project cost")
+        sub = Decimal(0) if re.fullmatch(r"0+(\.0+)?", text) else parse_amount(subsidy_text, "Subsidy")   # 0 = no subsidy
     except ValueError as exc:
-        return out, {"subsidy": str(exc)}
-    if subsidy >= total:
-        return out, {"subsidy": "Subsidy must be less than the total project cost."}
-    out["subsidy_amount"] = fmt_total(subsidy)
-    out["after_subsidy"] = fmt_total(total - subsidy)
-    return out, {}
+        return None, str(exc)
+    if sub >= total:
+        return None, "Subsidy must be less than the total project cost."
+    return {"subsidy": fmt_total(sub), "amount_after_subsidy": fmt_total(total - sub)}, None
 
 
 def parse_custom_terms(form):
@@ -177,6 +164,11 @@ def parse_custom_terms(form):
 def build_values(form):
     """Validate the submitted form. Returns (values_for_template, errors)."""
     values, errors = {}, {}
+    for name, options, label in (("project_type", QUOTATION_TYPES, "Quotation type"), ("panel_type", PANEL_TYPES, "Panel type")):
+        v = clean(form.get(name))
+        if v not in options:
+            errors[name] = f"{label}: please choose {' or '.join(options)}."
+        values[name] = v
     for name, (label, limit) in TEXT_FIELDS.items():
         v = clean(form.get(name))
         if not v:
@@ -189,12 +181,6 @@ def build_values(form):
         if not _NUM.match(v):
             errors[name] = f"{label} must be a number."
         values[name] = v
-
-    project_type = normalize_project_type(form.get("project_type"))
-    if project_type is None:
-        errors["project_type"] = "Select the project type (Residential, Commercial, Industrial or Agricultural)."
-    values["project_type"] = project_type or clean(form.get("project_type"))
-    values["project_type_caps"] = values["project_type"].upper()     # "...Solar Power for RESIDENTIAL" in rates table
 
     qty = clean(form.get("module_qty"))
     if not INT6.match(qty) or int(qty) <= 0:
@@ -227,8 +213,15 @@ def build_values(form):
 
     mode = form.get("pricing_mode") if form.get("pricing_mode") in MODES else "total_to_rate"
     if capacity is not None:
-        pricing, perr = compute_pricing(mode, capacity, form, with_subsidy=project_type == SUBSIDY_PROJECT_TYPE)
+        pricing, perr = compute_pricing(mode, capacity, form)
         errors.update(perr)
         if pricing:
             values.update(pricing)
+            values.update(subsidy="", amount_after_subsidy="")
+            if values["project_type"] in SUBSIDY_TYPES:
+                sub, serr = compute_subsidy(pricing["total_cost"], form.get("subsidy"))
+                if serr:
+                    errors["subsidy"] = serr
+                else:
+                    values.update(sub)
     return values, errors

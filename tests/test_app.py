@@ -6,9 +6,8 @@ The real-PDF test is skipped automatically when LibreOffice is not installed.
 import importlib.util
 import io
 import os
-import shutil
+import re
 import stat
-import subprocess
 import sys
 import tempfile
 import time
@@ -24,12 +23,10 @@ os.environ.update(SECRET_KEY="test-secret-" + "x" * 20, ADMIN_USERNAME="admin", 
 os.environ.pop("RENDER", None)
 
 import app as A  # noqa: E402
-import docxfill  # noqa: E402
 import pdfconv  # noqa: E402
-import quotation as Q  # noqa: E402
 
 FORM = {
-    "project_type": "Commercial", "customer_name": "Test Customer", "customer_address": "Surat, Gujarat",
+    "project_type": "Commercial", "panel_type": "Mono PERC", "subsidy": "78000", "customer_name": "Test Customer", "customer_address": "Surat, Gujarat",
     "module_qty": "25", "module_wp": "615", "capacity_kw": "15.375", "module_make": "WAAREE",
     "inverter_make": "Solaryaan", "inverter_qty": "01", "inverter_kw": "15", "acdb_make": "Havells", "dcdb_make": "Havells",
     "cable_make": "Polycab", "cable_ac_mm": "6", "cable_dc_mm": "4", "earth_make": "Polycab", "earth_mm": "6",
@@ -67,6 +64,17 @@ def _running(pid):
             return False
 
 
+def docx_text(data):
+    """All visible text of a filled .docx (body + header + footer), one paragraph per line."""
+    z = zipfile.ZipFile(io.BytesIO(data))
+    out = []
+    for name in z.namelist():
+        if re.match(r"^word/(document|header\d*|footer\d*)\.xml$", name):
+            xml = z.read(name).decode("utf-8")
+            out.append(re.sub(r"<[^>]+>", "", xml.replace("</w:p>", "\n")))
+    return "\n".join(out)
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         A._fails.clear()
@@ -76,6 +84,17 @@ class Base(unittest.TestCase):
         d = dict(FORM, csrf_token=self.tok)
         d.update(over)
         return self.c.post("/generate", data=d)
+
+    def capture(self, **over):
+        """POST /generate with the PDF step faked; returns (response, text of the Word file that was filled)."""
+        got = []
+
+        def fake_pdf(data):
+            got.append(data)
+            return b"%PDF-1.4 " + b"0" * 2000
+        with mock.patch.object(A, "docx_to_pdf", side_effect=fake_pdf):
+            r = self.post_form(**over)
+        return r, (docx_text(got[0]) if got else "")
 
 
 class HealthAndPages(Base):
@@ -183,6 +202,80 @@ class BadInput(Base):
         self.assertEqual((r.status_code, r.is_json), (413, True))
 
 
+class QuotationTypes(Base):
+    """Commercial / Residential templates, panel type dropdown, subsidy."""
+
+    def test_form_page_has_dropdowns_subsidy_and_both_term_lists(self):
+        page = self.c.get("/quotation").get_data(as_text=True)
+        self.assertIn('name="project_type"', page)
+        for text in ("Commercial", "Residential", "Topcon Mono", "Mono PERC", 'name="subsidy"'):
+            self.assertIn(text, page)
+        self.assertEqual(page.count('class="terms-set"'), 2)
+
+    def test_each_type_has_its_own_terms_and_extra_slots(self):
+        com, res = A.template_info("Commercial"), A.template_info("Residential")
+        self.assertTrue(any("GEDA" in t for t in com[0]))
+        self.assertFalse(any("GEDA" in t for t in res[0]))
+        self.assertTrue(any("PM Surya Ghar" in t for t in res[0]))
+        self.assertEqual((com[1], res[1]), (4, 4))
+
+    def test_commercial_prints_panel_type_and_no_subsidy(self):
+        r, text = self.capture(panel_type="Mono PERC")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("PV Module Mono PERC – 615 Wp", text)
+        self.assertIn("Commercial Rooftop Solar EPC Project", text)
+        self.assertNotIn("Subsidy", text)
+        self.assertNotIn("{{", text)               # every placeholder was filled
+
+    def test_residential_prints_subsidy_and_after_subsidy(self):
+        r, text = self.capture(project_type="Residential", panel_type="Topcon Mono", total_cost="200000", subsidy="78000",
+                               terms=["15", "16"])
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("PV Module Topcon Mono – 615 Wp", text)
+        self.assertIn("Residential Rooftop Solar EPC Project", text)
+        self.assertIn("(-)78,000/-", text)
+        self.assertIn("1,22,000/-", text)          # 2,00,000 - 78,000
+        self.assertIn("PM Surya Ghar", text)       # Residential terms, not Commercial ones
+        self.assertNotIn("GEDA", text)
+        self.assertNotIn("COMMERTIAL", text)
+        self.assertNotIn("{{", text)
+
+    def test_customer_capacity_and_type_in_pdf_and_filename(self):
+        r, text = self.capture(project_type="Residential", customer_name="Sanjay Thakor", capacity_kw="4.320")
+        self.assertIn("Sanjay Thakor", text)
+        self.assertIn("4.320 KW", text)
+        self.assertRegex(r.headers["Content-Disposition"], r"Quotation_Residential_Sanjay_Thakor_4\.32kW_\d\d-\d\d-\d{4}\.pdf")
+
+    def test_residential_terms_selection_and_extra_condition(self):
+        r, text = self.capture(project_type="Residential", terms=["16"], custom_term_1="Extra condition one")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("subsidy is given by the Government", text)
+        self.assertNotIn("Keep solar panels clean", text)
+        self.assertIn("Extra condition one", text)
+
+    def test_bad_quotation_or_panel_type_is_rejected(self):
+        for field, bad in (("project_type", "Industrial"), ("project_type", ""), ("panel_type", "Poly"), ("panel_type", "")):
+            r = self.post_form(**{field: bad})
+            self.assertEqual(r.status_code, 400, (field, bad))
+            self.assertIn(field, r.get_json()["errors"])
+
+    def test_subsidy_is_validated_for_residential_only(self):
+        for bad in ("", "abc", "-5", "300000", "200000"):          # empty, not a number, negative, >= total (2,00,000)
+            r = self.post_form(project_type="Residential", total_cost="200000", subsidy=bad)
+            self.assertEqual(r.status_code, 400, bad)
+            self.assertIn("subsidy", r.get_json()["errors"], bad)
+        r, text = self.capture(project_type="Residential", total_cost="200000", subsidy="0")       # 0 = no subsidy
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("(-)0/-", text)
+        r, text = self.capture(project_type="Commercial", subsidy="abc")                          # ignored for Commercial
+        self.assertEqual(r.status_code, 200)
+
+    def test_subsidy_helper(self):
+        from quotation import compute_subsidy
+        self.assertEqual(compute_subsidy("2,00,000", "78,000")[0], {"subsidy": "78,000", "amount_after_subsidy": "1,22,000"})
+        self.assertIsNone(compute_subsidy("2,00,000", "2,00,000")[0])
+
+
 class Failures(Base):
     def test_pdf_engine_busy_gives_503_json(self):
         with mock.patch.object(A, "docx_to_pdf", side_effect=pdfconv.PdfError("The server is busy.")):
@@ -199,7 +292,8 @@ class Failures(Base):
         self.assertNotIn("boom", r.get_json()["error"])           # internals never leak
 
     def test_missing_template(self):
-        with mock.patch.object(A, "TEMPLATE", ROOT / "docx_template" / "missing.docx"):
+        missing = {t: ROOT / "docx_template" / "missing.docx" for t in A.TEMPLATES}
+        with mock.patch.object(A, "TEMPLATES", missing):
             self.assertEqual(self.post_form().status_code, 500)
             self.assertIn("template", self.post_form().get_json()["error"].lower())
             page = self.c.get("/quotation")
@@ -211,7 +305,7 @@ class Failures(Base):
         with tempfile.TemporaryDirectory() as d:
             bad = Path(d) / "bad.docx"
             bad.write_bytes(b"this is not a zip file")
-            with mock.patch.object(A, "TEMPLATE", bad):
+            with mock.patch.object(A, "TEMPLATES", {t: bad for t in A.TEMPLATES}):
                 self.assertEqual(self.c.get("/quotation").status_code, 500)
                 self.assertEqual(self.post_form().status_code, 500)
 
@@ -285,131 +379,7 @@ class RealPdf(Base):
         self.assertEqual(r.status_code, 200, r.data[:200])
         self.assertEqual(r.mimetype, "application/pdf")
         self.assertTrue(r.data.startswith(b"%PDF"))
-        self.assertRegex(r.headers["Content-Disposition"], r'filename="?Quotation_Test_Customer_\d\d-\d\d-\d{4}\.pdf')
-
-
-RESIDENTIAL = dict(project_type="Residential", capacity_kw="4.320", module_qty="8", module_wp="540", total_cost="200000")
-
-
-def docx_text(data):
-    """All text of the Word file (bytes), for simple 'is this printed?' checks."""
-    from lxml import etree
-    root = etree.fromstring(zipfile.ZipFile(io.BytesIO(data)).read("word/document.xml"))
-    return "".join(t.text or "" for t in root.iter("{%s}t" % docxfill.W))
-
-
-class Subsidy(Base):
-    """Subsidy (Rs 78,000) is deducted ONLY for a Residential project - never for Commercial."""
-
-    def values(self, **over):
-        v, e = Q.build_values(dict(FORM, **dict(RESIDENTIAL, **over)))
-        return v, e
-
-    def test_residential_gets_78000_subsidy_by_default(self):
-        v, e = self.values()
-        self.assertEqual(e, {})
-        self.assertEqual((v["total_cost"], v["subsidy_amount"], v["after_subsidy"]), ("2,00,000", "78,000", "1,22,000"))
-        self.assertEqual(v["project_type"], "Residential")
-        self.assertEqual(v["project_type_caps"], "RESIDENTIAL")
-
-    def test_project_type_is_case_insensitive(self):
-        v, e = self.values(project_type=" residential ")
-        self.assertEqual((e, v["project_type"], v["subsidy_amount"]), ({}, "Residential", "78,000"))
-
-    def test_other_project_types_get_no_subsidy(self):
-        for kind in ("Commercial", "Industrial", "Agricultural"):
-            v, e = self.values(project_type=kind, subsidy="78,000")      # even if a subsidy value is sent
-            self.assertEqual(e, {}, kind)
-            self.assertEqual((v["subsidy_amount"], v["after_subsidy"]), ("", ""), kind)
-            self.assertEqual(v["total_cost"], "2,00,000", kind)
-
-    def test_wrong_project_type_is_an_error_not_a_silent_no_subsidy(self):
-        for bad in ("Residencial", "", "Home", "Residential!"):
-            v, e = self.values(project_type=bad)
-            self.assertIn("project_type", e, repr(bad))
-
-    def test_subsidy_can_be_edited_and_is_validated(self):
-        v, e = self.values(subsidy="60,000")
-        self.assertEqual((e, v["subsidy_amount"], v["after_subsidy"]), ({}, "60,000", "1,40,000"))
-        for bad in ("abc", "0", "-5", "2,00,000", "3,00,000", "1e30"):
-            v, e = self.values(subsidy=bad)
-            self.assertIn("subsidy", e, bad)
-
-    def test_subsidy_works_in_rate_and_manual_mode(self):
-        v, e = self.values(pricing_mode="rate_to_total", rate="42512.66")
-        self.assertEqual((e, v["total_cost"], v["after_subsidy"]), ({}, "2,00,000", "1,22,000"))
-        v, e = self.values(pricing_mode="manual", rate="42,512.66", amount="1,83,654.72", gst_amount="16,345.27")
-        self.assertEqual((e, v["after_subsidy"]), ({}, "1,22,000"))
-
-    def test_api_calc_returns_subsidy_only_for_residential(self):
-        h = {"X-CSRFToken": self.tok}
-        body = {"mode": "total_to_rate", "capacity_kw": "4.320", "total_cost": "200000"}
-        r = self.c.post("/api/calc", json=dict(body, project_type="Residential"), headers=h).get_json()
-        self.assertEqual((r["subsidy_amount"], r["after_subsidy"]), ("78,000", "1,22,000"))
-        r = self.c.post("/api/calc", json=dict(body, project_type="Commercial"), headers=h).get_json()
-        self.assertEqual((r["subsidy_amount"], r["after_subsidy"]), ("", ""))
-        r = self.c.post("/api/calc", json=body, headers=h).get_json()
-        self.assertEqual(r["subsidy_amount"], "")
-        r = self.c.post("/api/calc", json=dict(body, project_type="Residential", subsidy="9,00,000"), headers=h).get_json()
-        self.assertEqual(r["total_cost"], "2,00,000")                     # pricing still returned ...
-        self.assertIn("subsidy", r["subsidy_error"].lower())               # ... with a clear subsidy error
-
-    def test_generate_rejects_bad_subsidy_and_type(self):
-        r = self.post_form(**dict(RESIDENTIAL, subsidy="9,00,000"))
-        self.assertEqual(r.status_code, 400)
-        self.assertIn("subsidy", r.get_json()["errors"])
-        r = self.post_form(project_type="Residencial")
-        self.assertEqual(r.status_code, 400)
-        self.assertIn("project_type", r.get_json()["errors"])
-
-    def test_word_file_has_subsidy_rows_only_for_residential(self):
-        v, _ = self.values()
-        res = docx_text(docxfill.fill_docx(A.TEMPLATE, v, keep_terms=[1], show_subsidy=True))
-        self.assertIn("Subsidy", res)
-        self.assertIn("(-)78,000/-", res)
-        self.assertIn("Amount After Subsidy", res)
-        self.assertIn("1,22,000/-", res)
-        self.assertIn("2,00,000/-", res)                                   # total (incl. GST) is still printed
-        self.assertIn("Power for RESIDENTIAL", res)
-        v, _ = self.values(project_type="Commercial")
-        com = docx_text(docxfill.fill_docx(A.TEMPLATE, v, keep_terms=[1], show_subsidy=False))
-        for word in ("Subsidy", "(-)", "1,22,000", "78,000"):
-            self.assertNotIn(word, com, word)
-        self.assertIn("2,00,000/-", com)
-        self.assertIn("Power for COMMERCIAL", com)
-        for text in (res, com):
-            self.assertNotIn("{{", text)                                   # no placeholder is left behind
-            self.assertNotIn("COMMERTIAL", text)
-
-    def test_form_page_offers_fixed_project_types(self):
-        page = self.c.get("/quotation").data.decode()
-        for kind in Q.PROJECT_TYPES:
-            self.assertIn(f'<option value="{kind}"', page)
-        self.assertIn('id="subsidy"', page)
-
-
-@unittest.skipUnless(pdfconv.available() and shutil.which("pdftotext"), "LibreOffice / pdftotext not installed")
-class SubsidyPdf(Base):
-    def pdf_text(self, **over):
-        r = self.post_form(**over)
-        self.assertEqual(r.status_code, 200, r.data[:200])
-        with tempfile.TemporaryDirectory() as d:
-            f = Path(d) / "q.pdf"
-            f.write_bytes(r.data)
-            return subprocess.run(["pdftotext", "-layout", str(f), "-"], capture_output=True, text=True, check=True).stdout
-
-    def test_residential_pdf_shows_subsidy(self):
-        t = self.pdf_text(**RESIDENTIAL)
-        self.assertIn("Residential Rooftop Solar EPC Project", t)
-        for needle in ("Subsidy", "(-)78,000/-", "Amount After Subsidy", "1,22,000/-", "2,00,000/-"):
-            self.assertIn(needle, t, needle)
-
-    def test_commercial_pdf_has_no_subsidy(self):
-        t = self.pdf_text(**dict(RESIDENTIAL, project_type="Commercial"))
-        self.assertIn("Commercial Rooftop Solar EPC Project", t)
-        self.assertIn("2,00,000/-", t)
-        for needle in ("Subsidy", "78,000", "1,22,000"):
-            self.assertNotIn(needle, t, needle)
+        self.assertRegex(r.headers["Content-Disposition"], r'filename="?Quotation_Commercial_Test_Customer_15\.375kW_\d\d-\d\d-\d{4}\.pdf')
 
 
 if __name__ == "__main__":

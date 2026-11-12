@@ -1,0 +1,15 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+.git/
+.vercel/
+.vercelignore
+vercel.json
+tests/
+tools/
+README.md
+docx_template/originals/

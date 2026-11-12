@@ -91,22 +91,19 @@ a { color: var(--navy-3); }
   -webkit-appearance: none; appearance: none;
 }
 .field textarea { resize: vertical; min-height: 84px; }
+/* dropdown (Quotation type, Panel type): appearance is reset above, so draw our own arrow */
+.field select {
+  padding-right: 2.5rem; cursor: pointer; text-overflow: ellipsis;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230B2644' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right .8rem center / 16px;
+}
+.field select.is-invalid { border-color: var(--danger); background-color: #fffafa; }
 .field input::placeholder, .field textarea::placeholder { color: #9aa5b8; }
 .field input:focus, .field textarea:focus, .field select:focus {
   outline: none; border-color: var(--orange); box-shadow: 0 0 0 4px rgba(249, 163, 14, .22);
 }
 .field input[readonly] { background: #EEF1F6; color: #33415a; }
-.field input.is-invalid, .field textarea.is-invalid, .field select.is-invalid { border-color: var(--danger); background-color: #fffafa; }
-/* dropdown arrow (appearance is removed above, so draw our own) */
-.field select {
-  padding-right: 2.4rem; cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2358667e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right .8rem center; background-size: 18px;
-}
-.field select:invalid { color: #9aa5b8; }
-.field select option { color: var(--navy); }
+.field input.is-invalid, .field textarea.is-invalid { border-color: var(--danger); background: #fffafa; }
 .hint { font-size: .78rem; color: var(--muted); line-height: 1.35; }
-.hint.err { color: var(--danger); font-weight: 600; }
 .field-error { font-size: .8rem; font-weight: 600; color: var(--danger); }
 .ig { display: flex; align-items: stretch; }
 .ig > input { flex: 1 1 auto; min-width: 0; }
@@ -208,10 +205,11 @@ a { color: var(--navy-3); }
 
 .price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem .85rem; }
 .price-grid .field.wide { grid-column: span 2; }
-.subsidy-box { margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--line-2); }
 @media (min-width: 900px) { .price-grid { grid-template-columns: repeat(4, 1fr); } .price-grid .field.wide { grid-column: auto; } }
 .calc-hint { margin-top: .75rem; font-size: .8rem; color: var(--muted); }
 .calc-hint.err { color: var(--danger); font-weight: 600; }
+.subsidy-box { margin-top: 1.1rem; padding-top: 1.1rem; border-top: 1.5px dashed var(--line-2); }
+.terms-set { display: block; }
 
 /* ---------- terms & conditions ---------- */
 .terms-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .75rem; }

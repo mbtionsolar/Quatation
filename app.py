@@ -42,11 +42,12 @@ import pdfconv  # noqa: E402  (after logging is configured)
 from docxfill import count_custom_slots, fill_docx, list_terms  # noqa: E402
 from pdfconv import PdfError, docx_to_pdf  # noqa: E402
 from quotation import (CAPACITY_MAX, CUSTOM_TERM_LEN, CUSTOM_TERMS_MAX, DEFAULTS, GST_PERCENT,  # noqa: E402
-                       PROJECT_TYPES, SUBSIDY_PROJECT_TYPE, SUBSIDY_RESIDENTIAL, build_values, clean,
-                       compute_pricing, has_subsidy, parse_amount, parse_custom_terms)
+                       PANEL_TYPES, QUOTATION_TYPES, SUBSIDY_TYPES, build_values, clean, compute_pricing,
+                       parse_amount, parse_custom_terms)
 
 BASE = Path(__file__).resolve().parent
-TEMPLATE = BASE / "docx_template" / "quotation_template.docx"
+# one Word design per quotation type (Commercial / Residential); rebuilt from the originals with tools/build_template.py
+TEMPLATES = {t: BASE / "docx_template" / f"quotation_{t.lower()}.docx" for t in QUOTATION_TYPES}
 PDF_MIME = "application/pdf"
 STATIC = BASE / "static"
 # Render sets RENDER=true, Vercel sets VERCEL -> HTTPS only cookies + proxy headers are trusted there
@@ -131,29 +132,31 @@ class TemplateProblem(Exception):
     """The Word template is missing or damaged."""
 
 
-_tpl = {"mtime": None, "terms": [], "slots": 0}
+_tpl = {t: {"mtime": None, "terms": [], "slots": 0} for t in QUOTATION_TYPES}
 _tpl_lock = threading.Lock()
 
 
-def template_info():
-    """(terms, extra-condition slots) read from the Word template; re-read when the file changes."""
+def template_info(qtype):
+    """(terms, extra-condition slots) read from that type's Word template; re-read when the file changes."""
+    path = TEMPLATES[qtype]
     try:
-        mtime = TEMPLATE.stat().st_mtime
+        mtime = path.stat().st_mtime
     except OSError as exc:
-        log.error("Word template not found at %s: %s", TEMPLATE, exc)
+        log.error("Word template not found at %s: %s", path, exc)
         raise TemplateProblem("missing") from exc
     with _tpl_lock:
-        if _tpl["mtime"] != mtime:
+        cache = _tpl[qtype]
+        if cache["mtime"] != mtime:
             try:
-                terms, slots = list_terms(TEMPLATE), count_custom_slots(TEMPLATE)
+                terms, slots = list_terms(path), count_custom_slots(path)
             except Exception as exc:
-                log.exception("Word template could not be read")
+                log.exception("Word template could not be read: %s", path)
                 raise TemplateProblem("unreadable") from exc
             if not terms:
-                log.error("Word template has no Terms & Conditions table")
+                log.error("Word template has no Terms & Conditions table: %s", path)
                 raise TemplateProblem("no terms")
-            _tpl.update(mtime=mtime, terms=terms, slots=slots)
-        return _tpl["terms"], _tpl["slots"]
+            cache.update(mtime=mtime, terms=terms, slots=slots)
+        return cache["terms"], cache["slots"]
 
 
 # ---------- request lifecycle ----------
@@ -345,7 +348,8 @@ def healthz():
 def readyz():
     """Deeper check you can open in a browser to see what is wrong after a deploy."""
     try:
-        template_info()
+        for qtype in QUOTATION_TYPES:
+            template_info(qtype)
         template_ok = True
     except TemplateProblem:
         template_ok = False
@@ -398,11 +402,12 @@ def login():
 @app.get("/quotation")
 @login_required
 def quotation():
-    terms, slots = template_info()
-    return render_template("form.html", d=DEFAULTS, gst=GST_PERCENT, terms=terms,
-                           custom_slots=min(CUSTOM_TERMS_MAX, slots), custom_len=CUSTOM_TERM_LEN,
-                           project_types=PROJECT_TYPES, subsidy_type=SUBSIDY_PROJECT_TYPE,
-                           subsidy_default=int(SUBSIDY_RESIDENTIAL))
+    info = {t: template_info(t) for t in QUOTATION_TYPES}
+    terms_by_type = {t: info[t][0] for t in QUOTATION_TYPES}
+    custom_slots = min([CUSTOM_TERMS_MAX] + [slots for _terms, slots in info.values()])
+    return render_template("form.html", d=DEFAULTS, gst=GST_PERCENT, types=QUOTATION_TYPES, panel_types=PANEL_TYPES,
+                           subsidy_types=SUBSIDY_TYPES, terms_by_type=terms_by_type, custom_slots=custom_slots,
+                           custom_len=CUSTOM_TERM_LEN)
 
 
 @app.post("/api/calc")
@@ -418,13 +423,8 @@ def api_calc():
         capacity = parse_amount(str(data.get("capacity_kw", "")), "Project capacity", hi=CAPACITY_MAX)
     except ValueError as exc:
         return jsonify(error=str(exc))
-    out, errors = compute_pricing(mode, capacity, {k: str(v) for k, v in data.items()},
-                                  with_subsidy=has_subsidy(str(data.get("project_type", ""))))
-    if out is None:
-        return jsonify(error=next(iter(errors.values())))
-    if errors:      # pricing is fine, only the subsidy is wrong -> still return the pricing
-        out = dict(out, subsidy_error=errors.get("subsidy", ""))
-    return jsonify(out)
+    out, errors = compute_pricing(mode, capacity, {k: str(v) for k, v in data.items()})
+    return jsonify(error=next(iter(errors.values()))) if errors else jsonify(out)
 
 
 def _ints(values, lo, hi):
@@ -436,7 +436,11 @@ def _ints(values, lo, hi):
 @login_required
 def generate():
     values, errors = build_values(request.form)
-    terms, slots = template_info()
+    qtype = values.get("project_type")
+    if qtype not in TEMPLATES:                          # no valid quotation type -> nothing to build yet
+        return jsonify(errors=errors), 400
+    template = TEMPLATES[qtype]
+    terms, slots = template_info(qtype)
     chosen = _ints(request.form.getlist("terms"), 1, len(terms))
     custom_count = sum(1 for i in range(1, CUSTOM_TERMS_MAX + 1) if values.get(f"custom_term_{i}"))
     if not chosen and not custom_count:
@@ -448,10 +452,9 @@ def generate():
     wanted = set(_ints(request.form.getlist("highlight"), 1, len(terms)))
     custom_items, _ = parse_custom_terms(request.form)
     try:
-        data = fill_docx(TEMPLATE, values, keep_terms=chosen, custom_count=custom_count,
+        data = fill_docx(template, values, keep_terms=chosen, custom_count=custom_count,
                          highlight_terms=wanted & set(chosen),
-                         highlight_custom={k for k, (_t, hl) in enumerate(custom_items, 1) if hl},
-                         show_subsidy=has_subsidy(values["project_type"]))      # Residential only
+                         highlight_custom={k for k, (_t, hl) in enumerate(custom_items, 1) if hl})
     except Exception as exc:
         log.exception("[%s] Filling the Word template failed", g.rid)
         raise TemplateProblem("fill failed") from exc
@@ -461,7 +464,8 @@ def generate():
         log.warning("[%s] PDF conversion failed: %s", g.rid, exc)
         return error_response(503, str(exc))
     slug = re.sub(r"[^A-Za-z0-9]+", "_", clean(values["customer_name"])).strip("_")[:40] or "Customer"
-    filename = f"Quotation_{slug}_{datetime.now(IST):%d-%m-%Y}.pdf"
+    kw = re.sub(r"[^0-9.]", "", format(parse_amount(values["capacity_kw"], "Project capacity", hi=CAPACITY_MAX).normalize(), "f"))
+    filename = f"Quotation_{qtype}_{slug}_{kw}kW_{datetime.now(IST):%d-%m-%Y}.pdf"
     return send_file(io.BytesIO(pdf), as_attachment=True, download_name=filename, mimetype=PDF_MIME)
 
 
@@ -477,8 +481,8 @@ def logout_get():
 
 
 # PDF engine warm-up (first LibreOffice start is slow on a small free server)
-if os.environ.get("PDF_WARMUP", "1") == "1" and TEMPLATE.exists():
-    pdfconv.warm_up(TEMPLATE)
+if os.environ.get("PDF_WARMUP", "1") == "1" and all(p.exists() for p in TEMPLATES.values()):
+    pdfconv.warm_up(TEMPLATES[QUOTATION_TYPES[0]])
 
 if __name__ == "__main__":
     app.run(host=os.environ.get("HOST", "127.0.0.1"), port=_env_int("PORT", 5000), debug=False)

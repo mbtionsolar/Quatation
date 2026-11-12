@@ -4,7 +4,7 @@
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const app = $('#app');
-  const cfg = { calcUrl: app.dataset.calcUrl, loginUrl: app.dataset.loginUrl, gst: app.dataset.gst, subsidyType: app.dataset.subsidyType };
+  const cfg = { calcUrl: app.dataset.calcUrl, loginUrl: app.dataset.loginUrl, gst: app.dataset.gst };
   const form = $('#quotation-form');
   const csrf = $('meta[name="csrf-token"]').content;
   const alertBox = $('#alert-box');
@@ -23,9 +23,6 @@
     return raw !== '' && isFinite(n) ? inrFmt.format(n) : '';
   }
   const money = (v) => (inr(v) ? '₹ ' + inr(v) : '');
-  const num = (v) => parseFloat(String(v || '').replace(/[,\s₹]/g, '').replace(/\/-$/, ''));
-  // same style as the PDF: whole rupees without decimals, otherwise 2 decimals
-  const inrTotal = (n) => new Intl.NumberFormat('en-IN', Number.isInteger(n) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
   const SVG = {
     alert: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
@@ -86,8 +83,9 @@
       if (!draft || !Array.isArray(draft.pairs) || Date.now() - draft.t > 30 * 60 * 1000) return false;
       const by = {};
       draft.pairs.forEach(([k, v]) => { (by[k] = by[k] || []).push(String(v)); });
+      if (by.project_type) { f('project_type').value = by.project_type[0]; applyType(); }   // type decides which Terms list / subsidy fields are active
       [...form.elements].forEach((el) => {
-        if (!el.name || el.name === 'csrf_token' || ['hidden', 'button', 'submit', 'reset'].includes(el.type)) return;
+        if (!el.name || el.name === 'csrf_token' || el.disabled || ['hidden', 'button', 'submit', 'reset'].includes(el.type)) return;
         const vals = by[el.name];
         if (el.type === 'checkbox' || el.type === 'radio') el.checked = !!vals && vals.includes(el.value);
         else if (vals) el.value = vals[0];
@@ -126,7 +124,7 @@
     Object.entries(errors).forEach(([name, msg]) => {
       const isTerms = name === 'terms';
       const el = isTerms ? $('#terms-box') : f(name);
-      if (!el || el instanceof RadioNodeList) { loose.push(msg); return; }
+      if (!el || el.length) { loose.push(msg); return; }
       el.classList.add('is-invalid');
       const msgEl = document.createElement('div');
       msgEl.className = 'field-error js-error';
@@ -165,35 +163,6 @@
   ['capacity_kw', 'warranty_panel', 'warranty_inverter'].forEach((n) =>
     f(n).addEventListener('input', () => (f(n).value.trim() ? touched.add(n) : touched.delete(n))));
   ['module_qty', 'module_wp', 'module_make', 'inverter_make', 'inverter_kw'].forEach((n) => f(n).addEventListener('input', syncAuto));
-
-  // ---------- subsidy: ONLY for a Residential project ----------
-  const isSubsidy = () => val('project_type').toLowerCase() === String(cfg.subsidyType).toLowerCase();
-  const subsidyBox = $('#subsidy-box'), subsidyHint = $('#subsidy-hint'), subsidyHintText = subsidyHint.textContent;
-  function subsidyProblem() {            // '' when fine (or when there is no subsidy)
-    if (!isSubsidy()) return '';
-    const sub = num(f('subsidy').value);
-    if (!(sub > 0)) return 'Enter the subsidy amount.';
-    const total = num(f('total_cost').value);
-    if (total > 0 && sub >= total) return 'Subsidy must be less than the total project cost.';
-    return '';
-  }
-  function refreshSubsidy() {
-    const on = isSubsidy();
-    const total = num(f('total_cost').value), sub = num(f('subsidy').value);
-    const problem = subsidyProblem();
-    f('after_subsidy').value = on && !problem && total > 0 ? inrTotal(total - sub) : '';
-    subsidyHint.textContent = on && problem && f('subsidy').value.trim() ? problem : subsidyHintText;
-    subsidyHint.classList.toggle('err', on && !!problem && f('subsidy').value.trim() !== '');
-  }
-  function applyType() {
-    const on = isSubsidy();
-    subsidyBox.hidden = !on;
-    f('subsidy').disabled = !on;            // a disabled field is neither validated nor sent
-    f('subsidy').required = on;
-    $$('[data-sub-only]').forEach((el) => (el.hidden = !on));
-    updateSummary();
-  }
-  f('project_type').addEventListener('change', applyType);
 
   // ---------- pricing ----------
   const mode = () => form.querySelector('[name="pricing_mode"]:checked').value;
@@ -244,8 +213,9 @@
   f('capacity_kw').addEventListener('input', recalc);
 
   // ---------- terms & conditions ----------
-  const termItems = () => $$('.term', form);
-  const termBoxes = () => $$('input[name="terms"]', form);
+  const activeSet = () => $('.terms-set:not([hidden])', form);          // Commercial and Residential each have their own list
+  const termItems = () => $$('.term', activeSet());
+  const termBoxes = () => $$('input[name="terms"]', activeSet());
   const customRows = () => $$('.custom-row', form);
   const customInput = (row) => $('input[type="text"]', row);
   const customFilled = () => customRows().filter((r) => customInput(r).value.trim()).length;
@@ -279,6 +249,33 @@
   $('#terms-all').addEventListener('click', () => { termBoxes().forEach((b) => (b.checked = true)); updateTerms(); });
   $('#terms-none').addEventListener('click', () => { termBoxes().forEach((b) => (b.checked = false)); updateTerms(); });
 
+  // ---------- quotation type (Commercial / Residential) ----------
+  const subsidyBox = $('#subsidy-box');
+  const subsidyTypes = subsidyBox.dataset.types.split(',');
+  const qType = () => val('project_type');
+  const hasSubsidy = () => subsidyTypes.includes(qType());
+  const num = (v) => parseFloat(String(v || '').replace(/[,\s₹]/g, '').replace(/\/-$/, ''));
+  function applyType() {
+    const t = qType();
+    $$('.terms-set', form).forEach((set) => {
+      const on = set.dataset.type === t;
+      set.hidden = !on;
+      $$('input', set).forEach((i) => { i.disabled = !on; });
+    });
+    const sub = hasSubsidy();
+    subsidyBox.hidden = !sub;
+    $$('input', subsidyBox).forEach((i) => { i.disabled = !sub; });
+    $$('[data-sub-only]').forEach((el) => { el.hidden = !sub; });
+    updateTerms();
+    recalc();
+  }
+  f('project_type').addEventListener('change', applyType);
+  function updateAfterSubsidy() {            // amount after subsidy = total cost - subsidy (the server recalculates it for the PDF)
+    const out = f('amount_after_subsidy');
+    const total = num(f('total_cost').value), sub = num(f('subsidy').value);
+    out.value = hasSubsidy() && total > 0 && sub >= 0 && sub < total ? inrFmt.format(total - sub) : '';
+  }
+
   // ---------- live summary + section progress ----------
   function setSum(key, text, empty) {
     $$(`[data-sum="${key}"]`).forEach((el) => { el.textContent = text; el.classList.toggle('is-empty', !!empty); });
@@ -286,15 +283,16 @@
   function updateSummary() {
     const name = val('customer_name'), kw = val('capacity_kw');
     setSum('customer', name || 'Customer name…', !name);
-    setSum('project', [val('project_type') && `${val('project_type')} Rooftop Solar`, kw && `${kw} kW`].filter(Boolean).join(' · '));
+    updateAfterSubsidy();
+    setSum('project', [qType() && `${qType()} Rooftop Solar`, kw && `${kw} kW`].filter(Boolean).join(' · '));
+    setSum('panel', val('panel_type') || '–');
+    setSum('subsidy', money(f('subsidy').value) || '–');
+    setSum('after', money(f('amount_after_subsidy').value) || '–');
     setSum('total', money(f('total_cost').value) || '₹ –');
     setSum('capacity', kw ? `${kw} kW` : '–');
     setSum('rate', money(f('rate').value) || '–');
     setSum('amount', money(f('amount').value) || '–');
     setSum('gst', money(f('gst_amount').value) || '–');
-    refreshSubsidy();
-    setSum('subsidy', money(f('subsidy').value) ? '− ' + money(f('subsidy').value) : '–');
-    setSum('after', money(f('after_subsidy').value) || '–');
     const on = termsOn(), extra = customFilled();
     setSum('terms', `${on + extra} lines`);
     updateChipsDone();
@@ -304,7 +302,7 @@
   const chips = $$('.chip');
   function sectionDone(sec) {
     if (sec.id === 's5') return termsOn() + customFilled() > 0;
-    return $$('[required]', sec).every((el) => el.value.trim() !== '');
+    return $$('[required]', sec).every((el) => el.disabled || el.value.trim() !== '');
   }
   function updateChipsDone() {
     sections.forEach((sec, i) => chips[i] && chips[i].classList.toggle('is-done', sectionDone(sec)));
@@ -327,7 +325,7 @@
   form.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.target.tagName !== 'INPUT' || ['checkbox', 'radio'].includes(e.target.type)) return;
     e.preventDefault();
-    const els = $$('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([readonly]), textarea', form).filter((el) => !el.disabled);
+    const els = $$('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([readonly]), textarea, select', form).filter((el) => !el.disabled);
     const next = els[els.indexOf(e.target) + 1];
     next ? next.focus() : e.target.blur();
   });
@@ -338,7 +336,7 @@
     clearErrors();
     const errs = {};
     $$('[required]', form).forEach((el) => {
-      if (!el.name || el.readOnly || el.type === 'radio') return;
+      if (!el.name || el.readOnly || el.disabled || el.type === 'radio') return;
       if (!el.value.trim()) errs[el.name] = 'This field is required.';
     });
     const m = mode();
@@ -346,10 +344,14 @@
     if (m === 'rate_to_total' && !val('rate')) errs.rate = 'Enter the rate per kW.';
     if (m !== 'manual' && !errs.total_cost && !errs.rate && (!val('rate') || !val('total_cost'))) errs[m === 'total_to_rate' ? 'total_cost' : 'rate'] = 'Could not calculate. Check the capacity and amount.';
     if (m === 'manual') ['rate', 'amount', 'gst_amount', 'total_cost'].forEach((n) => { if (!val(n)) errs[n] = 'This field is required.'; });
-    if (isSubsidy() && !errs.subsidy) { const sp = subsidyProblem(); if (sp) errs.subsidy = sp; }
     if (val('contact_mobile') && !/^\d{10}$/.test(val('contact_mobile'))) errs.contact_mobile = 'Enter a 10 digit mobile number.';
     if (val('module_qty') && !(parseInt(val('module_qty'), 10) > 0)) errs.module_qty = 'Must be 1 or more.';
     if (val('module_wp') && !(parseInt(val('module_wp'), 10) > 0)) errs.module_wp = 'Must be 1 or more.';
+    if (hasSubsidy() && val('subsidy') && !errs.subsidy) {
+      const sub = num(val('subsidy')), total = num(val('total_cost'));
+      if (!(sub >= 0)) errs.subsidy = 'Subsidy must be a number (0 if none).';
+      else if (total > 0 && sub >= total) errs.subsidy = 'Subsidy must be less than the total project cost.';
+    }
     if (termsOn() + customFilled() === 0) errs.terms = 'Select at least one Terms & Conditions item or add an extra condition.';
     if (Object.keys(errs).length) { showFieldErrors(errs); return false; }
     return true;
@@ -385,9 +387,10 @@
       b('MBTION Engineering – Solar Quotation'),
       `Customer: ${val('customer_name')}`,
       `Project: ${val('project_type')} Rooftop Solar EPC${kw ? ` – ${kw} kW` : ''}`,
+      `Panels: ${val('panel_type')} – ${val('module_qty')} × ${val('module_wp')}Wp`,
       `Total cost (incl. GST): ${money(f('total_cost').value)}`,
+      ...(hasSubsidy() ? [`Subsidy: ${money(f('subsidy').value)} → Amount after subsidy: ${money(f('amount_after_subsidy').value)}`] : []),
       `Rate: ${money(f('rate').value)} per kW + GST @ ${cfg.gst}% (${money(f('gst_amount').value)})`,
-      ...(isSubsidy() ? [`Subsidy: − ${money(f('subsidy').value)}`, `Amount after subsidy: ${money(f('after_subsidy').value)}`] : []),
       '',
       `Contact: ${val('contact_name')} +91 ${val('contact_mobile')}`,
     ];
@@ -397,7 +400,7 @@
   function renderReview() {
     const kw = val('capacity_kw');
     const specs = [
-      ['PV modules', `${val('module_make')} – ${val('module_qty')} × ${val('module_wp')}Wp`],
+      ['PV modules', `${val('module_make')} – ${val('panel_type')} – ${val('module_qty')} × ${val('module_wp')}Wp`],
       ['Inverter', `${val('inverter_make')} – ${val('inverter_qty')} nos × ${val('inverter_kw')} kW`],
       ['ACDB / DCDB', `${val('acdb_make')} / ${val('dcdb_make')}`],
       ['Cables', `${val('cable_make')} – AC ${val('cable_ac_mm')} mm / DC ${val('cable_dc_mm')} mm (Cu)`],
@@ -423,9 +426,9 @@
           <tr><th>Rate per kW</th><td class="rv-num">${esc(money(f('rate').value))}</td></tr>
           <tr><th>Sub-total</th><td class="rv-num">${esc(money(f('amount').value))}</td></tr>
           <tr><th>GST @ ${esc(cfg.gst)}%</th><td class="rv-num">${esc(money(f('gst_amount').value))}</td></tr>
-          ${isSubsidy() ? `<tr><th>Subsidy</th><td class="rv-num">− ${esc(money(f('subsidy').value))}</td></tr>
-          <tr><th>Amount after subsidy</th><td class="rv-num">${esc(money(f('after_subsidy').value))}</td></tr>` : ''}
-          <tr class="rv-total"><th>Total cost (incl. GST)</th><td class="rv-num">${esc(money(f('total_cost').value))}</td></tr>
+          ${hasSubsidy() ? `<tr><th>Subsidy</th><td class="rv-num">(−) ${esc(money(f('subsidy').value))}</td></tr>
+          <tr><th>Amount after subsidy</th><td class="rv-num">${esc(money(f('amount_after_subsidy').value))}</td></tr>` : ''}
+          <tr class="rv-total"><th>Total cost</th><td class="rv-num">${esc(money(f('total_cost').value))}</td></tr>
         </tbody></table></div></div>
         <div class="rv-sec"><h4><span>05</span>Terms &amp; conditions (${terms.length})</h4>
           <ol class="rv-terms">${terms.map((t, i) => `<li class="${t.hl ? 'hl' : ''}"><b>${i + 1}</b><span>${esc(t.text)}</span></li>`).join('')}</ol></div>

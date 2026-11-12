@@ -11,16 +11,16 @@ SUBSIDY_TYPES = ("Residential",)                      # only these quotations ha
 DEFAULTS = {
     "project_type": "Commercial", "customer_name": "", "customer_address": "",
     "panel_type": "Topcon Mono", "subsidy": "78000",
-    "module_qty": "25", "module_wp": "615", "capacity_kw": "15.375",
-    "module_make": "WAAREE ENERGY LTD", "inverter_make": "Solaryaan", "inverter_qty": "01", "inverter_kw": "15.00",
+    "module_qty": "", "module_wp": "", "capacity_kw": "",
+    "module_make": "", "inverter_make": "Solaryaan", "inverter_qty": "01", "inverter_kw": "",
     "acdb_make": "Havells", "dcdb_make": "Havells",
     "cable_make": "Polycab", "cable_ac_mm": "6", "cable_dc_mm": "4",
     "earth_make": "Polycab", "earth_mm": "6", "la_make": "Polytech", "la_mm": "16",
     "structure_make": "Apollo/Hindustar", "gi_pipe": "40X40 & 40X60", "thickness": "2",
     "structure_height": "6/4", "conduit_make": "Polycab",
     "pricing_mode": "total_to_rate", "rate": "", "amount": "", "gst_amount": "", "total_cost": "",
-    "warranty_panel": "WAAREE 615Wp", "warranty_panel_years": "25",
-    "warranty_inverter": "Solaryaan 15.00 KW", "warranty_inverter_years": "07", "warranty_service_years": "05",
+    "warranty_panel": "", "warranty_panel_years": "25",
+    "warranty_inverter": "", "warranty_inverter_years": "07", "warranty_service_years": "05",
     "contact_name": "JANAK JOSHI", "contact_mobile": "8320565108",
 }
 
